@@ -348,25 +348,58 @@ app.delete('/api/words/:id', (req, res) => {
   res.json({ ok: true });
 });
 
-// TTS using macOS `say` (Monica = es-ES neural voice)
+// TTS — Piper neural TTS (cross-platform) with macOS `say` fallback
+// Priority: 1) piper/venv/bin/piper (Python, native ARM64/x86_64)
+//           2) piper/piper standalone binary (Linux/Windows)
+//           3) macOS `say` command
+const PIPER_DIR   = path.join(__dirname, 'piper');
+const PIPER_PY    = path.join(PIPER_DIR, 'venv', 'bin', 'piper');
+const PIPER_BIN   = path.join(PIPER_DIR, process.platform === 'win32' ? 'piper.exe' : 'piper');
+const PIPER_MODEL = path.join(PIPER_DIR, 'es_ES-davefx-medium.onnx');
+
+function getPiperCmd(wavPath) {
+  if (fs.existsSync(PIPER_PY) && fs.existsSync(PIPER_MODEL))
+    return [PIPER_PY, ['--model', PIPER_MODEL, '--output-file', wavPath]];
+  if (fs.existsSync(PIPER_BIN) && fs.existsSync(PIPER_MODEL))
+    return [PIPER_BIN, ['--model', PIPER_MODEL, '--output_file', wavPath, '--quiet']];
+  return null;
+}
+
 app.get('/api/tts', async (req, res) => {
   const text = req.query.text?.trim();
   if (!text) return res.status(400).end();
 
-  const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  const aiff = path.join(os.tmpdir(), `linglo-${id}.aiff`);
-  const wav  = path.join(os.tmpdir(), `linglo-${id}.wav`);
-  const cleanup = () => { fs.unlink(aiff, () => {}); fs.unlink(wav, () => {}); };
+  const id  = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const wav = path.join(os.tmpdir(), `linglo-${id}.wav`);
+  const cleanup = () => fs.unlink(wav, () => {});
 
   try {
-    await new Promise((resolve, reject) => {
-      const p = spawn('say', ['-v', 'Monica', text, '-o', aiff]);
-      p.on('close', code => code === 0 ? resolve() : reject());
-    });
-    await new Promise((resolve, reject) => {
-      const p = spawn('afconvert', ['-f', 'WAVE', '-d', 'LEI16', aiff, wav]);
-      p.on('close', code => code === 0 ? resolve() : reject());
-    });
+    const piperCmd = getPiperCmd(wav);
+    if (piperCmd) {
+      const [bin, args] = piperCmd;
+      await new Promise((resolve, reject) => {
+        const p = spawn(bin, args);
+        p.stdin.write(text);
+        p.stdin.end();
+        p.on('close', code => code === 0 ? resolve() : reject(new Error(`piper exited ${code}`)));
+        p.on('error', reject);
+      });
+    } else if (process.platform === 'darwin') {
+      // macOS fallback until Piper is set up — run: ./setup-piper.sh
+      const aiff = wav.replace('.wav', '.aiff');
+      await new Promise((resolve, reject) => {
+        const p = spawn('say', ['-v', 'Monica', text, '-o', aiff]);
+        p.on('close', c => c === 0 ? resolve() : reject());
+      });
+      await new Promise((resolve, reject) => {
+        const p = spawn('afconvert', ['-f', 'WAVE', '-d', 'LEI16', aiff, wav]);
+        p.on('close', c => c === 0 ? resolve() : reject());
+      });
+      fs.unlink(aiff, () => {});
+    } else {
+      return res.status(503).end('TTS not configured — run setup-piper.sh');
+    }
+
     res.setHeader('Content-Type', 'audio/wav');
     const stream = fs.createReadStream(wav);
     stream.pipe(res);
