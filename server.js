@@ -93,7 +93,7 @@ async function autoImport() {
 // --- Routes ---
 
 app.get('/api/books', (req, res) => {
-  res.json(db.prepare('SELECT * FROM books ORDER BY created_at DESC').all());
+  res.json(db.prepare('SELECT * FROM books ORDER BY title COLLATE NOCASE ASC').all());
 });
 
 app.post('/api/upload', upload.single('epub'), async (req, res) => {
