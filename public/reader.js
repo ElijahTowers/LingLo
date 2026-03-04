@@ -231,6 +231,22 @@ document.getElementById('content').addEventListener('mouseup', async e => {
   }
 });
 
+// ── TTS ──
+function speak(text) {
+  if (!window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  const utt = new SpeechSynthesisUtterance(text);
+  utt.lang = 'es-ES';
+  const voices = window.speechSynthesis.getVoices();
+  const spanish = voices.find(v => v.lang.startsWith('es'));
+  if (spanish) utt.voice = spanish;
+  window.speechSynthesis.speak(utt);
+}
+
+document.getElementById('speak-btn').addEventListener('click', () => {
+  if (currentWord) speak(currentWord);
+});
+
 // ── Word click ──
 document.getElementById('content').addEventListener('click', async e => {
   if (dragHandled) { dragHandled = false; return; }
@@ -255,6 +271,7 @@ document.getElementById('content').addEventListener('click', async e => {
   if (!sidebarOpen) openSidebar();
   showTab('translate');
   showWordView(word, currentSentence);
+  speak(word);
 
   // Translate
   const transEl = document.getElementById('sidebar-translation');

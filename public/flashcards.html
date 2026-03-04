@@ -449,6 +449,38 @@
       flex-shrink: 0;
     }
     .wi-delete:hover { background: rgba(239,68,68,0.22); color: var(--red); border-color: rgba(239,68,68,0.35); }
+    .wi-actions { display: flex; gap: 6px; flex-shrink: 0; }
+    .wi-speak {
+      background: rgba(124,58,237,0.09);
+      color: rgba(124,58,237,0.6);
+      border: 1px solid rgba(124,58,237,0.15);
+      border-radius: 8px;
+      width: 34px;
+      height: 34px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 1rem;
+      transition: all 0.15s;
+      flex-shrink: 0;
+    }
+    .wi-speak:hover { background: rgba(124,58,237,0.2); color: var(--accent); border-color: rgba(124,58,237,0.35); }
+
+    .card-speak-btn {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      background: rgba(124,58,237,0.12);
+      color: rgba(124,58,237,0.7);
+      border: 1px solid rgba(124,58,237,0.2);
+      border-radius: 7px;
+      padding: 5px 8px;
+      font-size: 0.78rem;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .card-speak-btn:hover { background: rgba(124,58,237,0.25); color: var(--accent); }
 
     .list-empty {
       text-align: center;
@@ -641,6 +673,7 @@
               <div class="card-face card-front">
                 <div class="card-front-label">Spanish</div>
                 <div class="card-word">${word.word}</div>
+                <button class="card-speak-btn" id="card-speak-btn" title="Pronounce">🔊</button>
                 <div class="card-source">${word.book_title || ''}</div>
                 <div class="card-hint">Click to reveal · Space</div>
               </div>
@@ -676,7 +709,13 @@
 
       document.getElementById('flashcard').addEventListener('click', e => {
         if (e.target.closest('#card-delete-btn')) return;
+        if (e.target.closest('#card-speak-btn')) return;
         flipCard();
+      });
+
+      document.getElementById('card-speak-btn').addEventListener('click', e => {
+        e.stopPropagation();
+        speak(word.word);
       });
 
       document.getElementById('card-delete-btn').addEventListener('click', async e => {
@@ -747,9 +786,17 @@
                 ${date ? `<span class="wi-meta-item">· ${date}</span>` : ''}
               </div>
             </div>
-            <button class="wi-delete" title="Delete" data-id="${w.id}">🗑</button>
+            <div class="wi-actions">
+              <button class="wi-speak" title="Pronounce" data-word="${escHtml(w.word)}">🔊</button>
+              <button class="wi-delete" title="Delete" data-id="${w.id}">🗑</button>
+            </div>
           </div>`;
       }).join('');
+
+      // Speak buttons
+      container.querySelectorAll('.wi-speak').forEach(btn => {
+        btn.addEventListener('click', () => speak(btn.dataset.word));
+      });
 
       // Delete buttons
       container.querySelectorAll('.wi-delete').forEach(btn => {
@@ -775,6 +822,17 @@
       if (!sentence || !word) return sentence;
       const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       return sentence.replace(new RegExp(`(${escaped})`, 'gi'), '<span class="highlight">$1</span>');
+    }
+
+    function speak(text) {
+      if (!window.speechSynthesis) return;
+      window.speechSynthesis.cancel();
+      const utt = new SpeechSynthesisUtterance(text);
+      utt.lang = 'es-ES';
+      const voices = window.speechSynthesis.getVoices();
+      const spanish = voices.find(v => v.lang.startsWith('es'));
+      if (spanish) utt.voice = spanish;
+      window.speechSynthesis.speak(utt);
     }
 
     function escHtml(s) {
