@@ -11,18 +11,24 @@
 
     :root {
       --purple: #7c3aed;
-      --purple-light: #ede9fe;
+      --purple-dim: #a78bfa;
       --green: #22c55e;
       --red: #ef4444;
+      --bg: #0d0d1a;
+      --surface: #13131f;
+      --surface2: #1c1c2e;
+      --border: rgba(255,255,255,0.07);
+      --text: #e8e6f0;
+      --text-muted: rgba(232,230,240,0.45);
       --font-ui: 'Inter', -apple-system, sans-serif;
       --font-read: 'Lora', Georgia, serif;
     }
 
     body {
       font-family: var(--font-ui);
-      background: #0d0d1a;
+      background: var(--bg);
       min-height: 100vh;
-      color: white;
+      color: var(--text);
       display: flex;
       flex-direction: column;
       -webkit-font-smoothing: antialiased;
@@ -30,43 +36,115 @@
 
     /* ── Header ── */
     header {
-      padding: 16px 24px;
+      padding: 0 20px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      border-bottom: 1px solid rgba(255,255,255,0.06);
+      border-bottom: 1px solid var(--border);
+      height: 54px;
+      flex-shrink: 0;
+      gap: 12px;
     }
     .logo {
-      font-size: 1.3rem;
+      font-size: 1.2rem;
       font-weight: 700;
-      color: #a78bfa;
+      color: var(--purple-dim);
       text-decoration: none;
+      flex-shrink: 0;
     }
-    .header-right { display: flex; align-items: center; gap: 10px; }
+    .header-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
     .btn {
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      padding: 7px 14px;
+      padding: 6px 13px;
       border-radius: 8px;
-      font-size: 0.85rem;
+      font-size: 0.84rem;
       font-weight: 500;
       cursor: pointer;
       border: none;
       transition: all 0.15s;
       text-decoration: none;
+      white-space: nowrap;
     }
     .btn-ghost {
-      background: rgba(255,255,255,0.07);
-      color: rgba(255,255,255,0.75);
-      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(255,255,255,0.06);
+      color: rgba(255,255,255,0.7);
+      border: 1px solid rgba(255,255,255,0.09);
     }
-    .btn-ghost:hover { background: rgba(255,255,255,0.12); }
+    .btn-ghost:hover { background: rgba(255,255,255,0.11); }
+    .btn-danger {
+      background: rgba(239,68,68,0.12);
+      color: var(--red);
+      border: 1px solid rgba(239,68,68,0.2);
+    }
+    .btn-danger:hover { background: rgba(239,68,68,0.22); }
 
-    /* ── Progress ── */
+    /* ── View tabs ── */
+    .view-tabs {
+      display: flex;
+      background: rgba(255,255,255,0.05);
+      border-radius: 8px;
+      padding: 3px;
+      gap: 2px;
+    }
+    .view-tab {
+      padding: 5px 14px;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      font-weight: 500;
+      cursor: pointer;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      transition: all 0.15s;
+    }
+    .view-tab.active {
+      background: rgba(124,58,237,0.4);
+      color: #c4b5fd;
+    }
+
+    /* ── Tool bar ── */
+    .deck-bar {
+      padding: 10px 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-bottom: 1px solid var(--border);
+      flex-wrap: wrap;
+    }
+    .deck-bar select {
+      background: rgba(255,255,255,0.07);
+      color: white;
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-size: 0.84rem;
+      font-family: inherit;
+      cursor: pointer;
+    }
+    .deck-bar select option { background: #1e1040; }
+    .deck-count { font-size: 0.84rem; color: var(--text-muted); }
+    .search-input {
+      flex: 1;
+      min-width: 140px;
+      max-width: 280px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.09);
+      border-radius: 8px;
+      color: white;
+      font-size: 0.84rem;
+      font-family: inherit;
+      padding: 6px 10px;
+      outline: none;
+    }
+    .search-input::placeholder { color: var(--text-muted); }
+    .search-input:focus { border-color: rgba(124,58,237,0.4); }
+
+    /* ── Flashcard view ── */
     .progress-area {
-      padding: 20px 24px 0;
-      max-width: 640px;
+      padding: 18px 20px 0;
+      max-width: 600px;
       margin: 0 auto;
       width: 100%;
     }
@@ -74,14 +152,14 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 10px;
-      font-size: 0.85rem;
+      margin-bottom: 8px;
+      font-size: 0.83rem;
     }
-    .progress-label { color: rgba(255,255,255,0.5); }
+    .progress-label { color: var(--text-muted); }
     .progress-counter { color: white; font-weight: 600; }
     .progress-track {
-      height: 4px;
-      background: rgba(255,255,255,0.1);
+      height: 3px;
+      background: rgba(255,255,255,0.08);
       border-radius: 99px;
       overflow: hidden;
     }
@@ -92,20 +170,19 @@
       transition: width 0.4s ease;
     }
 
-    /* ── Card scene ── */
     .card-area {
       flex: 1;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      padding: 32px 24px;
-      gap: 32px;
+      padding: 24px 20px;
+      gap: 24px;
     }
 
     .card-scene {
       perspective: 1200px;
-      width: min(560px, 100%);
+      width: min(540px, 100%);
       height: 300px;
     }
     .flashcard {
@@ -125,10 +202,9 @@
       backface-visibility: hidden;
       display: flex;
       flex-direction: column;
-      padding: 36px 40px;
+      padding: 32px 36px;
     }
 
-    /* Front */
     .card-front {
       background: white;
       align-items: center;
@@ -136,12 +212,12 @@
       text-align: center;
     }
     .card-front-label {
-      font-size: 0.72rem;
+      font-size: 0.7rem;
       font-weight: 600;
       letter-spacing: 0.1em;
       text-transform: uppercase;
       color: #9ca3af;
-      margin-bottom: 16px;
+      margin-bottom: 14px;
     }
     .card-word {
       font-family: var(--font-read);
@@ -149,29 +225,25 @@
       font-weight: 600;
       color: #111827;
       line-height: 1.2;
-      margin-bottom: 12px;
+      margin-bottom: 10px;
     }
-    .card-source {
-      font-size: 0.78rem;
-      color: #9ca3af;
-      font-style: italic;
-    }
+    .card-source { font-size: 0.76rem; color: #9ca3af; font-style: italic; }
     .card-hint {
       position: absolute;
-      bottom: 18px;
+      bottom: 16px;
       left: 0; right: 0;
       text-align: center;
-      font-size: 0.78rem;
+      font-size: 0.76rem;
       color: #c4b5fd;
       opacity: 0.7;
     }
 
-    /* Back */
     .card-back {
       background: linear-gradient(145deg, #1e1040, #2d1b69);
       transform: rotateY(180deg);
-      border: 1px solid rgba(167, 139, 250, 0.2);
+      border: 1px solid rgba(167,139,250,0.2);
       justify-content: center;
+      position: relative;
     }
     .card-back-label {
       font-size: 0.7rem;
@@ -179,23 +251,19 @@
       letter-spacing: 0.1em;
       text-transform: uppercase;
       color: #a78bfa;
-      margin-bottom: 14px;
+      margin-bottom: 12px;
     }
     .card-translation {
       font-family: var(--font-read);
-      font-size: 1.9rem;
+      font-size: 1.85rem;
       font-weight: 600;
       color: white;
-      margin-bottom: 20px;
+      margin-bottom: 18px;
       line-height: 1.2;
     }
-    .card-divider {
-      height: 1px;
-      background: rgba(167, 139, 250, 0.2);
-      margin-bottom: 18px;
-    }
+    .card-divider { height: 1px; background: rgba(167,139,250,0.2); margin-bottom: 16px; }
     .card-sentence {
-      font-size: 0.88rem;
+      font-size: 0.86rem;
       color: rgba(255,255,255,0.6);
       line-height: 1.7;
       font-style: italic;
@@ -204,27 +272,37 @@
       color: #c4b5fd;
       font-weight: 600;
       font-style: normal;
-      background: rgba(124, 58, 237, 0.25);
+      background: rgba(124,58,237,0.25);
       border-radius: 3px;
       padding: 0 3px;
     }
-    .card-chapter {
-      margin-top: 12px;
-      font-size: 0.72rem;
-      color: rgba(255,255,255,0.3);
-    }
+    .card-chapter { margin-top: 10px; font-size: 0.7rem; color: rgba(255,255,255,0.3); }
 
-    /* ── Buttons ── */
+    .card-delete-btn {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      background: rgba(239,68,68,0.12);
+      color: rgba(239,68,68,0.7);
+      border: 1px solid rgba(239,68,68,0.2);
+      border-radius: 7px;
+      padding: 5px 8px;
+      font-size: 0.78rem;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .card-delete-btn:hover { background: rgba(239,68,68,0.25); color: var(--red); }
+
     .card-buttons {
       display: flex;
-      gap: 16px;
-      width: min(560px, 100%);
+      gap: 14px;
+      width: min(540px, 100%);
     }
     .answer-btn {
       flex: 1;
-      padding: 16px;
-      border-radius: 14px;
-      font-size: 1rem;
+      padding: 14px;
+      border-radius: 12px;
+      font-size: 0.95rem;
       font-weight: 600;
       cursor: pointer;
       border: none;
@@ -232,39 +310,30 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 4px;
+      gap: 3px;
     }
-    .answer-btn small {
-      font-size: 0.72rem;
-      font-weight: 400;
-      opacity: 0.7;
-    }
+    .answer-btn small { font-size: 0.7rem; font-weight: 400; opacity: 0.7; }
     .btn-know {
-      background: rgba(34, 197, 94, 0.15);
+      background: rgba(34,197,94,0.12);
       color: var(--green);
-      border: 1.5px solid rgba(34, 197, 94, 0.3);
+      border: 1.5px solid rgba(34,197,94,0.25);
     }
-    .btn-know:hover { background: rgba(34, 197, 94, 0.25); border-color: var(--green); }
+    .btn-know:hover { background: rgba(34,197,94,0.22); }
     .btn-dont {
-      background: rgba(239, 68, 68, 0.12);
+      background: rgba(239,68,68,0.1);
       color: var(--red);
-      border: 1.5px solid rgba(239, 68, 68, 0.25);
+      border: 1.5px solid rgba(239,68,68,0.2);
     }
-    .btn-dont:hover { background: rgba(239, 68, 68, 0.22); border-color: var(--red); }
+    .btn-dont:hover { background: rgba(239,68,68,0.2); }
     .answer-btn:disabled { opacity: 0.3; cursor: default; }
 
-    /* ── Keyboard hints ── */
-    .key-hints {
-      font-size: 0.75rem;
-      color: rgba(255,255,255,0.25);
-      text-align: center;
-    }
+    .key-hints { font-size: 0.73rem; color: rgba(255,255,255,0.22); text-align: center; }
     .key-hints kbd {
       display: inline-block;
-      background: rgba(255,255,255,0.07);
-      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.09);
       border-radius: 4px;
-      padding: 1px 6px;
+      padding: 1px 5px;
       font-family: inherit;
     }
 
@@ -277,51 +346,116 @@
       justify-content: center;
       text-align: center;
       padding: 40px 24px;
-      gap: 16px;
+      gap: 14px;
     }
-    .state-emoji { font-size: 4rem; }
-    .state-title { font-size: 1.8rem; font-weight: 700; }
-    .state-sub { color: rgba(255,255,255,0.5); max-width: 360px; line-height: 1.6; }
-    .state-stats {
-      display: flex;
-      gap: 32px;
-      margin-top: 8px;
-    }
+    .state-emoji { font-size: 3.5rem; }
+    .state-title { font-size: 1.7rem; font-weight: 700; }
+    .state-sub { color: var(--text-muted); max-width: 360px; line-height: 1.6; }
+    .state-stats { display: flex; gap: 32px; margin-top: 6px; }
     .stat { display: flex; flex-direction: column; align-items: center; gap: 4px; }
     .stat-num { font-size: 2rem; font-weight: 700; }
-    .stat-label { font-size: 0.8rem; color: rgba(255,255,255,0.4); }
+    .stat-label { font-size: 0.78rem; color: var(--text-muted); }
     .stat-num.green { color: var(--green); }
     .stat-num.red { color: var(--red); }
 
-    /* ── Shuffle / filter bar ── */
-    .deck-bar {
-      padding: 14px 24px;
+    /* Confetti canvas */
+    #confetti-canvas { position: fixed; inset: 0; pointer-events: none; z-index: 999; }
+
+    /* ── List view ── */
+    #list-view {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 20px;
+    }
+    .word-list {
+      max-width: 760px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .word-item {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 18px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 12px;
+      align-items: start;
+      transition: border-color 0.15s;
+    }
+    .word-item:hover { border-color: rgba(124,58,237,0.3); }
+    .word-item.deleting { opacity: 0.4; pointer-events: none; }
+
+    .word-item-main { min-width: 0; }
+    .word-item-row1 {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      margin-bottom: 6px;
+      flex-wrap: wrap;
+    }
+    .wi-word {
+      font-family: var(--font-read);
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .wi-arrow { color: var(--text-muted); font-size: 0.9rem; }
+    .wi-translation {
+      font-size: 1rem;
+      color: #c4b5fd;
+      font-weight: 500;
+    }
+    .wi-sentence {
+      font-size: 0.83rem;
+      color: var(--text-muted);
+      font-style: italic;
+      line-height: 1.6;
+      margin-bottom: 8px;
+    }
+    .wi-sentence .highlight {
+      color: #c4b5fd;
+      font-style: normal;
+      font-weight: 500;
+      background: rgba(124,58,237,0.18);
+      border-radius: 3px;
+      padding: 0 2px;
+    }
+    .wi-meta {
+      display: flex;
+      gap: 14px;
+      font-size: 0.73rem;
+      color: rgba(255,255,255,0.28);
+      flex-wrap: wrap;
+    }
+    .wi-meta-item { display: flex; align-items: center; gap: 4px; }
+
+    .wi-delete {
+      background: rgba(239,68,68,0.09);
+      color: rgba(239,68,68,0.6);
+      border: 1px solid rgba(239,68,68,0.15);
+      border-radius: 8px;
+      width: 34px;
+      height: 34px;
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 10px;
-      border-bottom: 1px solid rgba(255,255,255,0.06);
-    }
-    .deck-bar select {
-      background: rgba(255,255,255,0.07);
-      color: white;
-      border: 1px solid rgba(255,255,255,0.1);
-      border-radius: 8px;
-      padding: 6px 10px;
-      font-size: 0.85rem;
-      font-family: inherit;
       cursor: pointer;
+      font-size: 1rem;
+      transition: all 0.15s;
+      flex-shrink: 0;
     }
-    .deck-bar select option { background: #1e1040; }
-    .deck-count { font-size: 0.85rem; color: rgba(255,255,255,0.4); }
+    .wi-delete:hover { background: rgba(239,68,68,0.22); color: var(--red); border-color: rgba(239,68,68,0.35); }
 
-    /* Confetti canvas */
-    #confetti-canvas {
-      position: fixed;
-      inset: 0;
-      pointer-events: none;
-      z-index: 999;
+    .list-empty {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--text-muted);
     }
+    .list-empty .state-emoji { font-size: 2.5rem; margin-bottom: 12px; }
   </style>
 </head>
 <body>
@@ -329,6 +463,10 @@
 
   <header>
     <a class="logo" href="/">LingLo</a>
+    <div class="view-tabs">
+      <button class="view-tab active" id="tab-cards">Cards</button>
+      <button class="view-tab" id="tab-list">List</button>
+    </div>
     <div class="header-right">
       <button class="btn btn-ghost" id="shuffle-btn">⇄ Shuffle</button>
       <a href="/" class="btn btn-ghost">← Library</a>
@@ -337,10 +475,17 @@
 
   <div class="deck-bar">
     <select id="book-filter"><option value="">All books</option></select>
+    <input class="search-input" id="search-input" placeholder="Search words…" autocomplete="off" style="display:none">
     <span class="deck-count" id="deck-count"></span>
   </div>
 
-  <div id="app"></div>
+  <div id="cards-view">
+    <div id="app"></div>
+  </div>
+
+  <div id="list-view" style="display:none">
+    <div class="word-list" id="word-list"></div>
+  </div>
 
   <script>
     let allWords = [];
@@ -349,36 +494,87 @@
     let known = 0;
     let unknown = 0;
     let flipped = false;
+    let currentView = 'cards'; // 'cards' | 'list'
 
     // ── Load words ──
     async function loadWords() {
       const res = await fetch('/api/words');
       allWords = await res.json();
       populateFilter();
-      buildDeck();
+      rebuildView();
     }
 
     function populateFilter() {
       const sel = document.getElementById('book-filter');
-      const books = [...new Set(allWords.map(w => w.book_title).filter(Boolean))];
+      // Keep only "All books" and re-add book options
+      while (sel.options.length > 1) sel.remove(1);
+      const books = [...new Set(allWords.map(w => w.book_title).filter(Boolean))].sort();
       books.forEach(b => {
         const opt = document.createElement('option');
         opt.value = b;
         opt.textContent = b;
         sel.appendChild(opt);
       });
-      sel.addEventListener('change', buildDeck);
     }
 
+    function getFilter() { return document.getElementById('book-filter').value; }
+    function getSearch() { return document.getElementById('search-input').value.trim().toLowerCase(); }
+
+    function getFilteredWords() {
+      const filter = getFilter();
+      const search = getSearch();
+      return allWords.filter(w => {
+        if (filter && w.book_title !== filter) return false;
+        if (search) {
+          return w.word.toLowerCase().includes(search)
+            || w.translation.toLowerCase().includes(search)
+            || (w.sentence || '').toLowerCase().includes(search);
+        }
+        return true;
+      });
+    }
+
+    function rebuildView() {
+      if (currentView === 'cards') buildDeck();
+      else renderList();
+      updateCount();
+    }
+
+    function updateCount() {
+      const words = getFilteredWords();
+      const el = document.getElementById('deck-count');
+      el.textContent = words.length === 0 ? 'No words' : `${words.length} word${words.length !== 1 ? 's' : ''}`;
+    }
+
+    // ── View toggle ──
+    document.getElementById('tab-cards').addEventListener('click', () => switchView('cards'));
+    document.getElementById('tab-list').addEventListener('click', () => switchView('list'));
+
+    function switchView(view) {
+      currentView = view;
+      document.getElementById('tab-cards').classList.toggle('active', view === 'cards');
+      document.getElementById('tab-list').classList.toggle('active', view === 'list');
+      document.getElementById('cards-view').style.display = view === 'cards' ? '' : 'none';
+      document.getElementById('list-view').style.display = view === 'list' ? '' : 'none';
+      document.getElementById('shuffle-btn').style.display = view === 'cards' ? '' : 'none';
+      document.getElementById('search-input').style.display = view === 'list' ? '' : 'none';
+      rebuildView();
+    }
+
+    // ── Filters ──
+    document.getElementById('book-filter').addEventListener('change', rebuildView);
+    document.getElementById('search-input').addEventListener('input', () => {
+      if (currentView === 'list') renderList();
+      updateCount();
+    });
+
+    // ── Deck (cards view) ──
     function buildDeck() {
-      const filter = document.getElementById('book-filter').value;
-      deck = allWords.filter(w => !filter || w.book_title === filter);
+      deck = getFilteredWords();
       currentIdx = 0;
       known = 0;
       unknown = 0;
       flipped = false;
-      document.getElementById('deck-count').textContent =
-        deck.length === 0 ? 'No cards' : `${deck.length} card${deck.length !== 1 ? 's' : ''}`;
       render();
     }
 
@@ -394,7 +590,7 @@
       render();
     });
 
-    // ── Render ──
+    // ── Render flashcards ──
     function render() {
       const app = document.getElementById('app');
 
@@ -414,7 +610,7 @@
           <div class="state-screen">
             <div class="state-emoji">🔍</div>
             <div class="state-title">No cards in this deck</div>
-            <div class="state-sub">Select a different book filter above.</div>
+            <div class="state-sub">Try a different filter.</div>
           </div>`;
         return;
       }
@@ -449,6 +645,7 @@
                 <div class="card-hint">Click to reveal · Space</div>
               </div>
               <div class="card-face card-back">
+                <button class="card-delete-btn" id="card-delete-btn" title="Delete word">🗑 Delete</button>
                 <div class="card-back-label">Translation</div>
                 <div class="card-translation">${word.translation}</div>
                 ${sentence ? `
@@ -477,7 +674,21 @@
         </div>
       `;
 
-      document.getElementById('flashcard').addEventListener('click', flipCard);
+      document.getElementById('flashcard').addEventListener('click', e => {
+        if (e.target.closest('#card-delete-btn')) return;
+        flipCard();
+      });
+
+      document.getElementById('card-delete-btn').addEventListener('click', async e => {
+        e.stopPropagation();
+        await deleteWord(word.id);
+        // Remove from deck and continue
+        deck.splice(currentIdx, 1);
+        if (currentIdx >= deck.length && currentIdx > 0) currentIdx--;
+        flipped = false;
+        render();
+        updateCount();
+      });
     }
 
     function renderDone() {
@@ -504,16 +715,73 @@
         </div>`;
     }
 
+    // ── List view ──
+    function renderList() {
+      const words = getFilteredWords();
+      const container = document.getElementById('word-list');
+
+      if (words.length === 0) {
+        container.innerHTML = `
+          <div class="list-empty">
+            <div class="state-emoji">🔍</div>
+            <div>No words match your filter.</div>
+          </div>`;
+        return;
+      }
+
+      container.innerHTML = words.map(w => {
+        const sentence = highlightWord(w.sentence || '', w.word);
+        const date = w.created_at ? new Date(w.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+        return `
+          <div class="word-item" id="wi-${w.id}">
+            <div class="word-item-main">
+              <div class="word-item-row1">
+                <span class="wi-word">${escHtml(w.word)}</span>
+                <span class="wi-arrow">→</span>
+                <span class="wi-translation">${escHtml(w.translation)}</span>
+              </div>
+              ${sentence ? `<div class="wi-sentence">${sentence}</div>` : ''}
+              <div class="wi-meta">
+                ${w.book_title ? `<span class="wi-meta-item">📚 ${escHtml(w.book_title)}</span>` : ''}
+                ${w.chapter_title ? `<span class="wi-meta-item">· ${escHtml(w.chapter_title)}</span>` : ''}
+                ${date ? `<span class="wi-meta-item">· ${date}</span>` : ''}
+              </div>
+            </div>
+            <button class="wi-delete" title="Delete" data-id="${w.id}">🗑</button>
+          </div>`;
+      }).join('');
+
+      // Delete buttons
+      container.querySelectorAll('.wi-delete').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const id = parseInt(btn.dataset.id);
+          const item = document.getElementById(`wi-${id}`);
+          item.classList.add('deleting');
+          await deleteWord(id);
+          item.remove();
+          updateCount();
+        });
+      });
+    }
+
+    // ── Delete ──
+    async function deleteWord(id) {
+      await fetch(`/api/words/${id}`, { method: 'DELETE' });
+      allWords = allWords.filter(w => w.id !== id);
+    }
+
+    // ── Helpers ──
     function highlightWord(sentence, word) {
       if (!sentence || !word) return sentence;
       const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      return sentence.replace(
-        new RegExp(`(${escaped})`, 'gi'),
-        '<span class="highlight">$1</span>'
-      );
+      return sentence.replace(new RegExp(`(${escaped})`, 'gi'), '<span class="highlight">$1</span>');
     }
 
-    // ── Flip ──
+    function escHtml(s) {
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    // ── Flip / Answer ──
     function flipCard() {
       const card = document.getElementById('flashcard');
       if (!card) return;
@@ -525,7 +793,6 @@
       }
     }
 
-    // ── Answer ──
     function answer(didKnow) {
       if (!flipped) return;
       if (didKnow) known++; else unknown++;
@@ -544,12 +811,12 @@
 
     // ── Keyboard ──
     document.addEventListener('keydown', e => {
+      if (currentView !== 'cards') return;
       if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); flipCard(); }
       if (e.key === 'ArrowRight') answer(true);
       if (e.key === 'ArrowLeft') answer(false);
     });
 
-    // Delegate button clicks
     document.addEventListener('click', e => {
       if (e.target.closest('#btn-know')) answer(true);
       if (e.target.closest('#btn-dont')) answer(false);
