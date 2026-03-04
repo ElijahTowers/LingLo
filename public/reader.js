@@ -10,7 +10,7 @@ let activeWordEl = null;
 let currentWord = '';
 let currentTranslation = '';
 let currentSentence = '';
-let sidebarOpen = true;
+let sidebarOpen = window.innerWidth >= 640;
 let searchMatches = [];
 let searchCurrent = -1;
 let currentPage = 0;
@@ -558,27 +558,36 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 });
 
 // ── Sidebar toggle ──
+function isMobile() { return window.innerWidth < 640; }
+
 function openSidebar() {
   sidebarOpen = true;
   document.getElementById('sidebar').classList.remove('closed');
   document.getElementById('sidebar-toggle').classList.add('active');
-  document.getElementById('page-summary-bar').style.right = '380px';
-  clearTimeout(paginationTimer);
-  paginationTimer = setTimeout(() => {
-    const ratio = totalPages > 1 ? currentPage / (totalPages - 1) : 0;
-    setupPagination(ratio);
-  }, 270);
+  if (isMobile()) {
+    document.getElementById('sidebar-backdrop').classList.add('visible');
+  } else {
+    document.getElementById('page-summary-bar').style.right = '380px';
+    clearTimeout(paginationTimer);
+    paginationTimer = setTimeout(() => {
+      const ratio = totalPages > 1 ? currentPage / (totalPages - 1) : 0;
+      setupPagination(ratio);
+    }, 270);
+  }
 }
 function closeSidebar() {
   sidebarOpen = false;
   document.getElementById('sidebar').classList.add('closed');
   document.getElementById('sidebar-toggle').classList.remove('active');
-  document.getElementById('page-summary-bar').style.right = '0';
-  clearTimeout(paginationTimer);
-  paginationTimer = setTimeout(() => {
-    const ratio = totalPages > 1 ? currentPage / (totalPages - 1) : 0;
-    setupPagination(ratio);
-  }, 270);
+  document.getElementById('sidebar-backdrop').classList.remove('visible');
+  if (!isMobile()) {
+    document.getElementById('page-summary-bar').style.right = '0';
+    clearTimeout(paginationTimer);
+    paginationTimer = setTimeout(() => {
+      const ratio = totalPages > 1 ? currentPage / (totalPages - 1) : 0;
+      setupPagination(ratio);
+    }, 270);
+  }
 }
 
 document.getElementById('sidebar-toggle').addEventListener('click', () => {
@@ -902,6 +911,48 @@ const resizeObserver = new ResizeObserver(() => {
   }, 300);
 });
 resizeObserver.observe(document.getElementById('text-column'));
+
+// ── Click zones (left 30% = prev, right 30% = next) ──
+document.getElementById('text-column').addEventListener('click', e => {
+  if (e.target.closest('.word')) return;
+  if (isDragging) return;
+  const rect = document.getElementById('text-column').getBoundingClientRect();
+  const relX = e.clientX - rect.left;
+  const W = rect.width;
+  if (relX < W * 0.3) {
+    if (currentPage > 0) goToPage(currentPage - 1);
+    else loadChapter(currentIndex - 1, true);
+  } else if (relX > W * 0.7) {
+    if (currentPage < totalPages - 1) goToPage(currentPage + 1);
+    else loadChapter(currentIndex + 1);
+  }
+});
+
+// ── Swipe navigation ──
+let touchStartX = 0, touchStartY = 0, touchStartTime = 0;
+document.getElementById('text-column').addEventListener('touchstart', e => {
+  touchStartX = e.touches[0].clientX;
+  touchStartY = e.touches[0].clientY;
+  touchStartTime = Date.now();
+}, { passive: true });
+document.getElementById('text-column').addEventListener('touchend', e => {
+  const dx = e.changedTouches[0].clientX - touchStartX;
+  const dy = e.changedTouches[0].clientY - touchStartY;
+  const dt = Date.now() - touchStartTime;
+  if (dt < 400 && Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+    if (dx < 0) {
+      if (currentPage < totalPages - 1) goToPage(currentPage + 1);
+      else loadChapter(currentIndex + 1);
+    } else {
+      if (currentPage > 0) goToPage(currentPage - 1);
+      else loadChapter(currentIndex - 1, true);
+    }
+  }
+}, { passive: true });
+
+// ── Mobile init ──
+if (isMobile()) closeSidebar();
+document.getElementById('sidebar-backdrop').addEventListener('click', closeSidebar);
 
 // ── Boot ──
 init().then(updateWordsTabCount);

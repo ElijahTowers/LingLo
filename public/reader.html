@@ -635,6 +635,41 @@
       font-size: 0.88rem;
       color: var(--text-muted);
     }
+
+    /* ── Sidebar backdrop (mobile) ── */
+    .sidebar-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 299;
+      opacity: 0;
+      transition: opacity 0.25s;
+    }
+    .sidebar-backdrop.visible { opacity: 1; }
+
+    /* ── Mobile layout ── */
+    @media (max-width: 639px) {
+      .sidebar {
+        position: fixed;
+        right: 0;
+        top: 52px;
+        bottom: 0;
+        width: min(380px, 92vw) !important;
+        z-index: 300;
+        transform: translateX(0);
+        transition: transform 0.25s ease;
+        border-left: 1px solid var(--border) !important;
+      }
+      .sidebar.closed { transform: translateX(105%); }
+      .sidebar-backdrop { display: block; }
+      .page-summary-bar { right: 0 !important; transition: none; }
+      .reader-book-title { display: none; }
+      .reader-header-inner { padding: 0 12px; gap: 8px; }
+    }
+    @media (max-width: 480px) {
+      .reader-header .btn-primary { display: none; }
+    }
   </style>
 </head>
 <body>
@@ -677,6 +712,9 @@
         <div id="content"></div>
       </div>
     </div>
+
+    <!-- Sidebar backdrop (mobile) -->
+    <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
 
     <!-- Sidebar -->
     <aside class="sidebar" id="sidebar">
