@@ -13,6 +13,10 @@ let currentSentence = '';
 let sidebarOpen = true;
 let searchMatches = [];
 let searchCurrent = -1;
+let currentPage = 0;
+let totalPages = 1;
+let pageWidth = 0;
+let paginationTimer = null;
 
 // ── Init ──
 async function init() {
@@ -37,7 +41,7 @@ async function loadChapters() {
   document.title = `LingLo — ${data.title}`;
 }
 
-async function loadChapter(index) {
+async function loadChapter(index, goToLast = false) {
   if (index < 0 || index >= chapters.length) return;
   currentIndex = index;
   localStorage.setItem(`linglo-chapter-${bookId}`, index);
@@ -68,12 +72,7 @@ async function loadChapter(index) {
   wrapWords(content);
   markSavedWords(content);
   updateNav();
-  document.getElementById('text-column').scrollTop = 0;
-
-  // Reset summary bar
-  document.getElementById('page-summary-text').textContent = '';
-  document.getElementById('summarize-btn').textContent = '✦ Summarize this page';
-  document.getElementById('summarize-btn').disabled = false;
+  setupPagination(goToLast ? 1 : 0);
 }
 
 // ── Word wrapping ──
@@ -564,12 +563,22 @@ function openSidebar() {
   document.getElementById('sidebar').classList.remove('closed');
   document.getElementById('sidebar-toggle').classList.add('active');
   document.getElementById('page-summary-bar').style.right = '380px';
+  clearTimeout(paginationTimer);
+  paginationTimer = setTimeout(() => {
+    const ratio = totalPages > 1 ? currentPage / (totalPages - 1) : 0;
+    setupPagination(ratio);
+  }, 270);
 }
 function closeSidebar() {
   sidebarOpen = false;
   document.getElementById('sidebar').classList.add('closed');
   document.getElementById('sidebar-toggle').classList.remove('active');
   document.getElementById('page-summary-bar').style.right = '0';
+  clearTimeout(paginationTimer);
+  paginationTimer = setTimeout(() => {
+    const ratio = totalPages > 1 ? currentPage / (totalPages - 1) : 0;
+    setupPagination(ratio);
+  }, 270);
 }
 
 document.getElementById('sidebar-toggle').addEventListener('click', () => {
@@ -577,29 +586,37 @@ document.getElementById('sidebar-toggle').addEventListener('click', () => {
 });
 
 // ── Chapter navigation ──
-document.getElementById('prev-btn').addEventListener('click', () => loadChapter(currentIndex - 1));
-document.getElementById('next-btn').addEventListener('click', () => loadChapter(currentIndex + 1));
+document.getElementById('prev-btn').addEventListener('click', () => {
+  if (currentPage > 0) goToPage(currentPage - 1);
+  else loadChapter(currentIndex - 1, true);
+});
+document.getElementById('next-btn').addEventListener('click', () => {
+  if (currentPage < totalPages - 1) goToPage(currentPage + 1);
+  else loadChapter(currentIndex + 1);
+});
 
 function updateNav() {
-  document.getElementById('prev-btn').disabled = currentIndex <= 0;
-  document.getElementById('next-btn').disabled = currentIndex >= chapters.length - 1;
+  const onFirst = currentPage <= 0;
+  const onLast = currentPage >= totalPages - 1;
+  document.getElementById('prev-btn').disabled = onFirst && currentIndex <= 0;
+  document.getElementById('next-btn').disabled = onLast && currentIndex >= chapters.length - 1;
+  const pageInfo = totalPages > 1 ? ` · ${currentPage + 1}/${totalPages}` : '';
   document.getElementById('chapter-counter').textContent =
-    chapters.length ? `${currentIndex + 1} / ${chapters.length}` : '';
+    chapters.length ? `${currentIndex + 1}/${chapters.length}${pageInfo}` : '';
 }
-
-// ── Reading progress ──
-document.getElementById('text-column').addEventListener('scroll', () => {
-  const el = document.getElementById('text-column');
-  const pct = el.scrollTop / (el.scrollHeight - el.clientHeight);
-  document.getElementById('progress-bar').style.width = (pct * 100) + '%';
-});
 
 // ── Keyboard shortcuts ──
 document.addEventListener('keydown', e => {
   if ((e.ctrlKey || e.metaKey) && e.key === 'f') { e.preventDefault(); openSearch(); return; }
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-  if (e.key === 'ArrowRight' && !e.shiftKey) loadChapter(currentIndex + 1);
-  if (e.key === 'ArrowLeft' && !e.shiftKey) loadChapter(currentIndex - 1);
+  if (e.key === 'ArrowRight' && !e.shiftKey) {
+    if (currentPage < totalPages - 1) goToPage(currentPage + 1);
+    else loadChapter(currentIndex + 1);
+  }
+  if (e.key === 'ArrowLeft' && !e.shiftKey) {
+    if (currentPage > 0) goToPage(currentPage - 1);
+    else loadChapter(currentIndex - 1, true);
+  }
   if (e.key === 'Escape') clearWordView();
 });
 
@@ -705,7 +722,13 @@ function goToSearchMatch(index) {
   searchCurrent = ((index % searchMatches.length) + searchMatches.length) % searchMatches.length;
   const match = searchMatches[searchCurrent];
   match.classList.add('search-current');
-  match.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  if (pageWidth > 0) {
+    const textCol = document.getElementById('text-column');
+    const elLeft = match.getBoundingClientRect().left - textCol.getBoundingClientRect().left;
+    const absLeft = elLeft + currentPage * pageWidth;
+    const matchPage = Math.max(0, Math.floor(absLeft / pageWidth));
+    if (matchPage !== currentPage) goToPage(matchPage);
+  }
   document.getElementById('search-count').textContent = `${searchCurrent + 1} / ${searchMatches.length}`;
 }
 
@@ -783,11 +806,12 @@ function loadStatsTab() {
 
 // ── Page summary ──
 function getVisibleText() {
+  const viewW = window.innerWidth;
   const viewH = window.innerHeight;
   return [...document.querySelectorAll('#content p, #content h1, #content h2, #content h3')]
     .filter(el => {
       const r = el.getBoundingClientRect();
-      return r.bottom > 0 && r.top < viewH;
+      return r.bottom > 0 && r.top < viewH && r.right > 0 && r.left < viewW;
     })
     .map(el => el.textContent.trim())
     .filter(Boolean)
@@ -824,6 +848,60 @@ document.getElementById('summarize-btn').addEventListener('click', async () => {
   btn.textContent = '✦ Summarize this page';
   btn.disabled = false;
 });
+
+// ── Pagination ──
+function setupPagination(restoreRatio = 0) {
+  const textCol = document.getElementById('text-column');
+  const pages = document.getElementById('chapter-pages');
+  if (!pages) return;
+  const W = textCol.clientWidth;
+  const summaryBarH = document.getElementById('page-summary-bar').offsetHeight;
+  const H = textCol.clientHeight - summaryBarH;
+  if (W === 0 || H === 0) return;
+  pageWidth = W;
+
+  const readableWidth = 680;
+  const minPad = 24;
+  const hPad = W > readableWidth + 2 * minPad ? Math.round((W - readableWidth) / 2) : minPad;
+  document.getElementById('chapter-title').style.padding = `48px ${hPad}px 24px`;
+  document.getElementById('content').style.padding = `0 ${hPad}px 120px`;
+
+  pages.style.height = H + 'px';
+  pages.style.columnWidth = W + 'px';
+  pages.style.columnGap = '0';
+  pages.style.columnFill = 'auto';
+  pages.style.transform = 'translateX(0)';
+
+  requestAnimationFrame(() => {
+    totalPages = Math.max(1, Math.ceil(pages.scrollWidth / W));
+    const target = restoreRatio >= 1 ? totalPages - 1 : Math.round(restoreRatio * (totalPages - 1));
+    currentPage = -1;
+    goToPage(target);
+  });
+}
+
+function goToPage(n) {
+  n = Math.max(0, Math.min(n, totalPages - 1));
+  currentPage = n;
+  const pages = document.getElementById('chapter-pages');
+  if (pages) pages.style.transform = `translateX(${-n * pageWidth}px)`;
+  const pct = totalPages > 1 ? n / (totalPages - 1) : 1;
+  document.getElementById('progress-bar').style.width = (pct * 100) + '%';
+  document.getElementById('page-summary-text').textContent = '';
+  document.getElementById('summarize-btn').textContent = '✦ Summarize this page';
+  document.getElementById('summarize-btn').disabled = false;
+  updateNav();
+}
+
+let resizeTimer = null;
+const resizeObserver = new ResizeObserver(() => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    const ratio = totalPages > 1 ? currentPage / (totalPages - 1) : 0;
+    setupPagination(ratio);
+  }, 300);
+});
+resizeObserver.observe(document.getElementById('text-column'));
 
 // ── Boot ──
 init().then(updateWordsTabCount);

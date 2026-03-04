@@ -103,18 +103,13 @@
     /* ── Text column ── */
     .text-column {
       flex: 1;
-      overflow-y: auto;
+      overflow: hidden;
       min-width: 0;
+      position: relative;
     }
-    .text-column::-webkit-scrollbar { width: 6px; }
-    .text-column::-webkit-scrollbar-track { background: transparent; }
-    .text-column::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
-    .text-column::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
 
-    .chapter-content {
-      max-width: 680px;
-      margin: 0 auto;
-      padding: 48px 32px 120px;
+    .chapter-pages {
+      position: relative;
     }
     .chapter-heading {
       font-family: var(--font-read);
@@ -677,7 +672,7 @@
   <div class="reader-layout">
     <!-- Reading text -->
     <div class="text-column" id="text-column">
-      <div class="chapter-content">
+      <div class="chapter-pages" id="chapter-pages">
         <div class="chapter-heading" id="chapter-title"></div>
         <div id="content"></div>
       </div>
