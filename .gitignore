@@ -1,0 +1,11 @@
+node_modules/
+db/
+uploads/
+*.epub
+*.db
+.DS_Store
+*.html.bak
+*_files/
+*.log
+.claude/
+Harry\ Potter*

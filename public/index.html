@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LingLo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Lora:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="header">
+    <div class="header-inner">
+      <span class="logo">LingLo</span>
+      <div class="header-actions">
+        <a href="/flashcards.html" class="btn btn-primary">
+          ✦ Flashcards <span class="badge" id="word-count"></span>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <main class="library-main">
+    <div class="library-hero">
+      <h1>Your Spanish Library</h1>
+      <p>Click a book to start reading. Click any word to translate it.</p>
+    </div>
+
+    <div class="upload-area" id="upload-area">
+      <div class="upload-icon">📚</div>
+      <p>Drop an EPUB here or <label for="file-input" class="upload-link">browse</label></p>
+      <input type="file" id="file-input" accept=".epub" hidden>
+      <div id="upload-status"></div>
+    </div>
+
+    <p class="section-title">Books</p>
+    <div class="book-grid" id="book-grid">
+      <p class="empty-msg">Loading…</p>
+    </div>
+  </main>
+
+  <script>
+    async function loadBooks() {
+      const res = await fetch('/api/books');
+      const books = await res.json();
+      const grid = document.getElementById('book-grid');
+      if (books.length === 0) {
+        grid.innerHTML = '<p class="empty-msg">No books yet. Upload an EPUB above.</p>';
+        return;
+      }
+      grid.innerHTML = books.map(b => `
+        <a class="book-card" href="/reader.html?book=${b.id}">
+          <div class="book-spine"></div>
+          <div class="book-cover">
+            <div class="book-title">${b.title}</div>
+            <div class="book-author">${b.author}</div>
+          </div>
+        </a>
+      `).join('');
+    }
+
+    async function loadWordCount() {
+      const res = await fetch('/api/words');
+      const words = await res.json();
+      const badge = document.getElementById('word-count');
+      badge.textContent = words.length > 0 ? words.length : '';
+    }
+
+    const fileInput = document.getElementById('file-input');
+    const uploadArea = document.getElementById('upload-area');
+    const status = document.getElementById('upload-status');
+
+    async function uploadFile(file) {
+      if (!file || !file.name.toLowerCase().endsWith('.epub')) {
+        status.textContent = 'Only EPUB files are supported.';
+        return;
+      }
+      status.textContent = 'Uploading…';
+      const fd = new FormData();
+      fd.append('epub', file);
+      try {
+        const res = await fetch('/api/upload', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (data.error) { status.textContent = 'Error: ' + data.error; return; }
+        status.textContent = `"${data.title}" added!`;
+        loadBooks();
+        loadWordCount();
+      } catch (err) {
+        status.textContent = 'Upload failed.';
+      }
+    }
+
+    fileInput.addEventListener('change', e => uploadFile(e.target.files[0]));
+    uploadArea.addEventListener('dragover', e => { e.preventDefault(); uploadArea.classList.add('drag-over'); });
+    uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('drag-over'));
+    uploadArea.addEventListener('drop', e => {
+      e.preventDefault();
+      uploadArea.classList.remove('drag-over');
+      uploadFile(e.dataTransfer.files[0]);
+    });
+
+    loadBooks();
+    loadWordCount();
+  </script>
+</body>
+</html>
