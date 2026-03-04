@@ -121,7 +121,7 @@ app.get('/api/books/:id/chapters', async (req, res) => {
     const book = db.prepare('SELECT * FROM books WHERE id = ?').get(req.params.id);
     if (!book) return res.status(404).json({ error: 'Book not found' });
     const epub = await getEpub(book.filepath);
-    const chapters = epub.flow
+    const chapters = epub.toc
       .filter(ch => ch.id)
       .map((ch, i) => ({ index: i, id: ch.id, title: ch.title || `Chapter ${i + 1}` }));
     res.json({ title: book.title, author: book.author, chapters });
@@ -135,7 +135,7 @@ app.get('/api/books/:id/chapter/:index', async (req, res) => {
     const book = db.prepare('SELECT * FROM books WHERE id = ?').get(req.params.id);
     if (!book) return res.status(404).json({ error: 'Book not found' });
     const epub = await getEpub(book.filepath);
-    const chapters = epub.flow.filter(ch => ch.id);
+    const chapters = epub.toc.filter(ch => ch.id);
     const idx = parseInt(req.params.index);
     const chapter = chapters[idx];
     if (!chapter) return res.status(404).json({ error: 'Chapter not found' });
