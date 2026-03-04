@@ -178,6 +178,7 @@ document.getElementById('content').addEventListener('mouseup', async e => {
   if (!sidebarOpen) openSidebar();
   showTab('translate');
   showWordView(text, currentSentence);
+  speak(text);
 
   const transEl = document.getElementById('sidebar-translation');
   transEl.textContent = 'Translating…';
@@ -232,15 +233,19 @@ document.getElementById('content').addEventListener('mouseup', async e => {
 });
 
 // ── TTS ──
-function speak(text) {
-  if (!window.speechSynthesis) return;
-  window.speechSynthesis.cancel();
-  const utt = new SpeechSynthesisUtterance(text);
-  utt.lang = 'es-ES';
-  const voices = window.speechSynthesis.getVoices();
-  const spanish = voices.find(v => v.lang.startsWith('es'));
-  if (spanish) utt.voice = spanish;
-  window.speechSynthesis.speak(utt);
+let _ttsAudio = null;
+async function speak(text) {
+  if (!text) return;
+  if (_ttsAudio) { _ttsAudio.pause(); _ttsAudio = null; }
+  try {
+    const res = await fetch(`/api/tts?text=${encodeURIComponent(text)}`);
+    if (!res.ok) return;
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    _ttsAudio = new Audio(url);
+    _ttsAudio.onended = () => { URL.revokeObjectURL(url); _ttsAudio = null; };
+    _ttsAudio.play();
+  } catch {}
 }
 
 document.getElementById('speak-btn').addEventListener('click', () => {

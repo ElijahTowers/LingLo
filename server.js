@@ -2,6 +2,8 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
+const { spawn } = require('child_process');
 const { EPub } = require('epub2');
 const Database = require('better-sqlite3');
 
@@ -344,6 +346,36 @@ app.get('/api/words', (req, res) => {
 app.delete('/api/words/:id', (req, res) => {
   db.prepare('DELETE FROM words WHERE id = ?').run(req.params.id);
   res.json({ ok: true });
+});
+
+// TTS using macOS `say` (Monica = es-ES neural voice)
+app.get('/api/tts', async (req, res) => {
+  const text = req.query.text?.trim();
+  if (!text) return res.status(400).end();
+
+  const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const aiff = path.join(os.tmpdir(), `linglo-${id}.aiff`);
+  const wav  = path.join(os.tmpdir(), `linglo-${id}.wav`);
+  const cleanup = () => { fs.unlink(aiff, () => {}); fs.unlink(wav, () => {}); };
+
+  try {
+    await new Promise((resolve, reject) => {
+      const p = spawn('say', ['-v', 'Monica', text, '-o', aiff]);
+      p.on('close', code => code === 0 ? resolve() : reject());
+    });
+    await new Promise((resolve, reject) => {
+      const p = spawn('afconvert', ['-f', 'WAVE', '-d', 'LEI16', aiff, wav]);
+      p.on('close', code => code === 0 ? resolve() : reject());
+    });
+    res.setHeader('Content-Type', 'audio/wav');
+    const stream = fs.createReadStream(wav);
+    stream.pipe(res);
+    stream.on('end', cleanup);
+    stream.on('error', cleanup);
+  } catch {
+    cleanup();
+    res.status(500).end();
+  }
 });
 
 autoImport().then(() => {
