@@ -9,3 +9,15 @@ uploads/
 *.log
 .claude/
 Harry\ Potter*
+piper/piper
+piper/piper.exe
+piper/*.onnx
+piper/*.onnx.json
+piper/venv/
+piper/espeak-ng
+piper/espeak-ng-data/
+piper/piper_phonemize
+piper/libtashkeel_model.ort
+piper/*.dylib
+piper/*.dSYM/
+piper/pkgconfig/
