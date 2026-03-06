@@ -165,8 +165,11 @@ document.getElementById('content').addEventListener('mouseup', async e => {
   const startSpan = dragStart;
   dragStart = null;
   isDragging = false;
-  if (!selected.length) return;
+  await activatePhrase(selected, startSpan);
+});
 
+async function activatePhrase(selected, startSpan) {
+  if (!selected.length) return;
   const text = selected.map(w => cleanWord(w.textContent)).filter(Boolean).join(' ');
   if (!text) return;
 
@@ -175,37 +178,63 @@ document.getElementById('content').addEventListener('mouseup', async e => {
   currentSentence = getSentence(startSpan);
   currentTranslation = '';
 
-  if (!sidebarOpen) openSidebar();
-  showTab('translate');
-  showWordView(text, currentSentence);
-  speak(text);
-
-  const transEl = document.getElementById('sidebar-translation');
-  transEl.textContent = 'Translating…';
-  transEl.className = 'sidebar-translation loading';
-
-  try {
-    const res = await fetch('/api/translate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, sentence: currentSentence })
-    });
-    if (!res.ok) throw new Error();
-    transEl.textContent = '';
-    transEl.className = 'sidebar-translation';
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      transEl.textContent += decoder.decode(value, { stream: true });
+  if (isMobile()) {
+    // Mobile: show inline popup above the first selected word
+    showPopup(text, startSpan);
+    speak(text);
+    try {
+      const res = await fetch('/api/translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, sentence: currentSentence })
+      });
+      if (!res.ok) throw new Error();
+      popupTranslation.textContent = '';
+      popupTranslation.className = 'popup-translation';
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        popupTranslation.textContent += decoder.decode(value, { stream: true });
+      }
+      currentTranslation = popupTranslation.textContent.trim();
+      positionPopup(startSpan);
+    } catch {
+      popupTranslation.textContent = 'Translation failed';
+      popupTranslation.className = 'popup-translation';
     }
-    currentTranslation = transEl.textContent.trim();
-  } catch {
-    transEl.textContent = 'Translation failed';
-    transEl.className = 'sidebar-translation';
+  } else {
+    if (!sidebarOpen) openSidebar();
+    showTab('translate');
+    showWordView(text, currentSentence);
+    speak(text);
+    const transEl = document.getElementById('sidebar-translation');
+    transEl.textContent = 'Translating…';
+    transEl.className = 'sidebar-translation loading';
+    try {
+      const res = await fetch('/api/translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, sentence: currentSentence })
+      });
+      if (!res.ok) throw new Error();
+      transEl.textContent = '';
+      transEl.className = 'sidebar-translation';
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        transEl.textContent += decoder.decode(value, { stream: true });
+      }
+      currentTranslation = transEl.textContent.trim();
+    } catch {
+      transEl.textContent = 'Translation failed';
+      transEl.className = 'sidebar-translation';
+    }
+    updateSaveBtn(text);
   }
-  updateSaveBtn(text);
 
   // Check for idioms if multi-word selection
   if (text.includes(' ')) {
@@ -230,6 +259,45 @@ document.getElementById('content').addEventListener('mouseup', async e => {
       }
     }).catch(() => {});
   }
+}
+
+// ── Touch drag selection ──
+let touchDragStart = null;
+let touchDragging = false;
+let touchDragHandled = false;
+
+document.getElementById('content').addEventListener('touchstart', e => {
+  const span = e.target.closest('.word');
+  if (!span) return;
+  touchDragStart = span;
+  touchDragging = false;
+  touchDragHandled = false;
+  clearDragSel();
+}, { passive: true });
+
+document.getElementById('content').addEventListener('touchmove', e => {
+  if (!touchDragStart) return;
+  const touch = e.touches[0];
+  const el = document.elementFromPoint(touch.clientX, touch.clientY);
+  const span = el?.closest('.word');
+  if (!span || span === touchDragStart) return;
+  touchDragging = true;
+  e.preventDefault(); // prevent scroll while selecting words
+  const allWords = [...document.querySelectorAll('#content .word')];
+  const a = allWords.indexOf(touchDragStart), b = allWords.indexOf(span);
+  const [from, to] = a < b ? [a, b] : [b, a];
+  clearDragSel();
+  allWords.slice(from, to + 1).forEach(w => w.classList.add('drag-sel'));
+}, { passive: false });
+
+document.getElementById('content').addEventListener('touchend', async e => {
+  if (!touchDragging || !touchDragStart) { touchDragStart = null; touchDragging = false; return; }
+  touchDragHandled = true;
+  const selected = [...document.querySelectorAll('#content .word.drag-sel')];
+  const startSpan = touchDragStart;
+  touchDragStart = null;
+  touchDragging = false;
+  await activatePhrase(selected, startSpan);
 });
 
 // ── TTS ──
@@ -272,41 +340,65 @@ document.getElementById('content').addEventListener('click', async e => {
   currentSentence = getSentence(span);
   currentTranslation = '';
 
-  // Open sidebar on first click if closed
-  if (!sidebarOpen) openSidebar();
-  showTab('translate');
-  showWordView(word, currentSentence);
-  speak(word);
-
-  // Translate
-  const transEl = document.getElementById('sidebar-translation');
-  transEl.textContent = 'Translating…';
-  transEl.className = 'sidebar-translation loading';
-
-  try {
-    const res = await fetch('/api/translate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: word, sentence: currentSentence })
-    });
-    if (!res.ok) throw new Error();
-    transEl.textContent = '';
-    transEl.className = 'sidebar-translation';
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      transEl.textContent += decoder.decode(value, { stream: true });
+  if (isMobile()) {
+    // Mobile: show inline popup, leave sidebar closed
+    showPopup(word, span);
+    speak(word);
+    try {
+      const res = await fetch('/api/translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: word, sentence: currentSentence })
+      });
+      if (!res.ok) throw new Error();
+      popupTranslation.textContent = '';
+      popupTranslation.className = 'popup-translation';
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        popupTranslation.textContent += decoder.decode(value, { stream: true });
+      }
+      currentTranslation = popupTranslation.textContent.trim();
+      // Re-position after content has rendered and height is known
+      if (activeWordEl) positionPopup(activeWordEl);
+    } catch {
+      popupTranslation.textContent = 'Translation failed';
+      popupTranslation.className = 'popup-translation';
     }
-    currentTranslation = transEl.textContent.trim();
-  } catch {
-    transEl.textContent = 'Translation failed';
-    transEl.className = 'sidebar-translation';
+  } else {
+    // Desktop: open sidebar as before
+    if (!sidebarOpen) openSidebar();
+    showTab('translate');
+    showWordView(word, currentSentence);
+    speak(word);
+    const transEl = document.getElementById('sidebar-translation');
+    transEl.textContent = 'Translating…';
+    transEl.className = 'sidebar-translation loading';
+    try {
+      const res = await fetch('/api/translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: word, sentence: currentSentence })
+      });
+      if (!res.ok) throw new Error();
+      transEl.textContent = '';
+      transEl.className = 'sidebar-translation';
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        transEl.textContent += decoder.decode(value, { stream: true });
+      }
+      currentTranslation = transEl.textContent.trim();
+    } catch {
+      transEl.textContent = 'Translation failed';
+      transEl.className = 'sidebar-translation';
+    }
+    updateSaveBtn(word);
   }
-
-  // Update save button state
-  updateSaveBtn(word);
 });
 
 
@@ -582,6 +674,61 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 // ── Sidebar toggle ──
 function isMobile() { return window.innerWidth < 640; }
 
+// ── Mobile inline popup ──
+const wordPopup = document.getElementById('word-popup');
+const popupWord = document.getElementById('popup-word');
+const popupTranslation = document.getElementById('popup-translation');
+
+function showPopup(word, anchorEl) {
+  popupWord.textContent = word;
+  popupTranslation.textContent = 'Translating…';
+  popupTranslation.className = 'popup-translation loading';
+  wordPopup.classList.add('visible');
+  positionPopup(anchorEl);
+}
+
+function positionPopup(anchorEl) {
+  const rect = anchorEl.getBoundingClientRect();
+  const popupW = wordPopup.offsetWidth || 220;
+  // Centre above the word, keep within viewport
+  let left = rect.left + rect.width / 2;
+  left = Math.max(popupW / 2 + 8, Math.min(left, window.innerWidth - popupW / 2 - 8));
+  const top = rect.top - wordPopup.offsetHeight - 12;
+  wordPopup.style.left = left + 'px';
+  wordPopup.style.top = Math.max(8, top) + 'px';
+}
+
+function hidePopup() {
+  wordPopup.classList.remove('visible');
+}
+
+document.getElementById('popup-speak-btn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (currentWord) speak(currentWord);
+});
+
+document.getElementById('popup-more-btn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  hidePopup();
+  openSidebar();
+  showTab('translate');
+  showWordView(currentWord, currentSentence);
+  // Put translation into sidebar if we already have it
+  const transEl = document.getElementById('sidebar-translation');
+  if (currentTranslation) {
+    transEl.textContent = currentTranslation;
+    transEl.className = 'sidebar-translation';
+    updateSaveBtn(currentWord);
+  }
+});
+
+// Dismiss popup on tap outside
+document.addEventListener('touchstart', (e) => {
+  if (wordPopup.classList.contains('visible') && !wordPopup.contains(e.target) && !e.target.closest('.word')) {
+    hidePopup();
+  }
+}, { passive: true });
+
 function openSidebar() {
   sidebarOpen = true;
   document.getElementById('sidebar').classList.remove('closed');
@@ -602,6 +749,7 @@ function closeSidebar() {
   document.getElementById('sidebar').classList.add('closed');
   document.getElementById('sidebar-toggle').classList.remove('active');
   document.getElementById('sidebar-backdrop').classList.remove('visible');
+  hidePopup();
   if (!isMobile()) {
     document.getElementById('page-summary-bar').style.right = '0';
     clearTimeout(paginationTimer);
@@ -958,6 +1106,7 @@ document.getElementById('text-column').addEventListener('touchstart', e => {
   touchStartTime = Date.now();
 }, { passive: true });
 document.getElementById('text-column').addEventListener('touchend', e => {
+  if (touchDragHandled) { touchDragHandled = false; return; }
   const dx = e.changedTouches[0].clientX - touchStartX;
   const dy = e.changedTouches[0].clientY - touchStartY;
   const dt = Date.now() - touchStartTime;
@@ -975,6 +1124,21 @@ document.getElementById('text-column').addEventListener('touchend', e => {
 // ── Mobile init ──
 if (isMobile()) closeSidebar();
 document.getElementById('sidebar-backdrop').addEventListener('click', closeSidebar);
+
+// ── Swipe left to close sidebar (mobile) ──
+(function() {
+  const sidebar = document.getElementById('sidebar');
+  let swipeStartX = 0, swipeStartY = 0;
+  sidebar.addEventListener('touchstart', e => {
+    swipeStartX = e.touches[0].clientX;
+    swipeStartY = e.touches[0].clientY;
+  }, { passive: true });
+  sidebar.addEventListener('touchend', e => {
+    const dx = e.changedTouches[0].clientX - swipeStartX;
+    const dy = e.changedTouches[0].clientY - swipeStartY;
+    if (dx < -50 && Math.abs(dx) > Math.abs(dy) * 1.5) closeSidebar();
+  }, { passive: true });
+})();
 
 // ── Boot ──
 init().then(updateWordsTabCount);
