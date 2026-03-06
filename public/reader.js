@@ -674,7 +674,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 // ── Sidebar toggle ──
 function isMobile() { return window.innerWidth < 640; }
 
-const APP_VERSION = 'v1.1';
+const APP_VERSION = 'v1.2';
 document.getElementById('version-badge').textContent = APP_VERSION;
 
 // ── Mobile inline popup ──
