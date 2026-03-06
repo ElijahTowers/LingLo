@@ -1,4 +1,5 @@
 require('dotenv').config();
+const APP_VERSION = 'v1.4';
 const express = require('express');
 const qrcode = require('qrcode');
 const http = require('http');
@@ -421,6 +422,8 @@ async function autoImport() {
 }
 
 // --- Routes ---
+
+app.get('/api/version', (req, res) => res.json({ version: APP_VERSION }));
 
 app.get('/api/books', (req, res) => {
   res.json(db.prepare('SELECT * FROM books ORDER BY title COLLATE NOCASE ASC').all());
