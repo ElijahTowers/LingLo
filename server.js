@@ -362,7 +362,13 @@ app.post('/terminal-auth', (req, res) => {
 
 // ── Auth wall — everything below requires login ──
 app.use(authMiddleware);
-app.use(express.static('public'));
+app.use(express.static('public', {
+  setHeaders(res, filePath) {
+    if (filePath.endsWith('.html') || filePath.endsWith('.js') || filePath.endsWith('.css')) {
+      res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+    }
+  }
+}));
 
 const storage = multer.diskStorage({
   destination: 'uploads/',
