@@ -739,6 +739,8 @@ function openSidebar() {
   document.getElementById('sidebar-toggle').classList.add('active');
   if (isMobile()) {
     document.getElementById('sidebar-backdrop').classList.add('visible');
+    // Push a history state so the back gesture closes the sidebar instead of leaving the page
+    history.pushState({ sidebar: true }, '');
   } else {
     document.getElementById('page-summary-bar').style.right = '380px';
     clearTimeout(paginationTimer);
@@ -748,12 +750,14 @@ function openSidebar() {
     }, 270);
   }
 }
-function closeSidebar() {
+function closeSidebar(fromPopstate = false) {
   sidebarOpen = false;
   document.getElementById('sidebar').classList.add('closed');
   document.getElementById('sidebar-toggle').classList.remove('active');
   document.getElementById('sidebar-backdrop').classList.remove('visible');
   hidePopup();
+  // If closed programmatically (not by back gesture), remove the history state we pushed
+  if (isMobile() && !fromPopstate && history.state?.sidebar) history.back();
   if (!isMobile()) {
     document.getElementById('page-summary-bar').style.right = '0';
     clearTimeout(paginationTimer);
@@ -1151,6 +1155,11 @@ document.getElementById('sidebar-backdrop').addEventListener('click', closeSideb
     if (dx < -50 && Math.abs(dx) > Math.abs(dy) * 1.5) closeSidebar();
   }, { passive: true });
 })();
+
+// ── Back gesture closes sidebar on mobile (History API) ──
+window.addEventListener('popstate', (e) => {
+  if (isMobile() && sidebarOpen) closeSidebar(true);
+});
 
 // ── Boot ──
 init().then(updateWordsTabCount);

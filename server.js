@@ -1,5 +1,5 @@
 require('dotenv').config();
-const APP_VERSION = 'v1.5';
+const APP_VERSION = 'v1.6';
 const express = require('express');
 const qrcode = require('qrcode');
 const http = require('http');
