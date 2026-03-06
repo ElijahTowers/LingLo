@@ -683,12 +683,32 @@ const wordPopup = document.getElementById('word-popup');
 const popupWord = document.getElementById('popup-word');
 const popupTranslation = document.getElementById('popup-translation');
 
+// Single flag: true when we've pushed a history entry for any overlay (popup or sidebar)
+let _overlayInHistory = false;
+
+function _pushOverlayHistory() {
+  if (!_overlayInHistory) {
+    try { history.pushState({ lingloOverlay: true }, ''); } catch(e) {}
+    _overlayInHistory = true;
+  }
+}
+
+function _popOverlayHistory(fromPopstate) {
+  if (_overlayInHistory && !fromPopstate) {
+    _overlayInHistory = false;
+    try { history.back(); } catch(e) {}
+  } else {
+    _overlayInHistory = false;
+  }
+}
+
 function showPopup(word, anchorEl) {
   popupWord.textContent = word;
   popupTranslation.textContent = 'Translating…';
   popupTranslation.className = 'popup-translation loading';
   wordPopup.classList.add('visible');
   positionPopup(anchorEl);
+  if (isMobile()) _pushOverlayHistory();
 }
 
 function positionPopup(anchorEl) {
@@ -702,8 +722,10 @@ function positionPopup(anchorEl) {
   wordPopup.style.top = Math.max(8, top) + 'px';
 }
 
-function hidePopup() {
+// skipHistory=true when the caller will handle history (e.g. closeSidebar, popup-more-btn)
+function hidePopup(skipHistory = false) {
   wordPopup.classList.remove('visible');
+  if (!sidebarOpen && !skipHistory) _popOverlayHistory(false);
 }
 
 document.getElementById('popup-speak-btn').addEventListener('click', (e) => {
@@ -713,7 +735,7 @@ document.getElementById('popup-speak-btn').addEventListener('click', (e) => {
 
 document.getElementById('popup-more-btn').addEventListener('click', (e) => {
   e.stopPropagation();
-  hidePopup();
+  hidePopup(true); // keep the existing history entry; openSidebar will reuse it
   openSidebar();
   showTab('translate');
   showWordView(currentWord, currentSentence);
@@ -739,8 +761,7 @@ function openSidebar() {
   document.getElementById('sidebar-toggle').classList.add('active');
   if (isMobile()) {
     document.getElementById('sidebar-backdrop').classList.add('visible');
-    // Push a history state so the back gesture closes the sidebar instead of leaving the page
-    history.pushState({ sidebar: true }, '');
+    _pushOverlayHistory(); // no-op if popup already pushed one
   } else {
     document.getElementById('page-summary-bar').style.right = '380px';
     clearTimeout(paginationTimer);
@@ -755,9 +776,8 @@ function closeSidebar(fromPopstate = false) {
   document.getElementById('sidebar').classList.add('closed');
   document.getElementById('sidebar-toggle').classList.remove('active');
   document.getElementById('sidebar-backdrop').classList.remove('visible');
-  hidePopup();
-  // If closed programmatically (not by back gesture), remove the history state we pushed
-  if (isMobile() && !fromPopstate && history.state?.sidebar) history.back();
+  hidePopup(true); // closeSidebar owns the history entry
+  if (isMobile()) _popOverlayHistory(fromPopstate);
   if (!isMobile()) {
     document.getElementById('page-summary-bar').style.right = '0';
     clearTimeout(paginationTimer);
@@ -1156,9 +1176,12 @@ document.getElementById('sidebar-backdrop').addEventListener('click', closeSideb
   }, { passive: true });
 })();
 
-// ── Back gesture closes sidebar on mobile (History API) ──
-window.addEventListener('popstate', (e) => {
-  if (isMobile() && sidebarOpen) closeSidebar(true);
+// ── Back gesture closes popup or sidebar on mobile (History API) ──
+window.addEventListener('popstate', () => {
+  if (!isMobile()) return;
+  _overlayInHistory = false; // entry was already popped by the browser
+  if (sidebarOpen) { closeSidebar(true); return; }
+  if (wordPopup.classList.contains('visible')) { hidePopup(true); return; }
 });
 
 // ── Boot ──
