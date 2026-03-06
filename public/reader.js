@@ -674,7 +674,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 // ── Sidebar toggle ──
 function isMobile() { return window.innerWidth < 640; }
 
-const APP_VERSION = 'v1.2';
+const APP_VERSION = 'v1.3';
 document.getElementById('version-badge').textContent = APP_VERSION;
 
 // ── Mobile inline popup ──
@@ -1131,11 +1131,19 @@ document.getElementById('sidebar-backdrop').addEventListener('click', closeSideb
 // ── Swipe left to close sidebar (mobile) ──
 (function() {
   const sidebar = document.getElementById('sidebar');
-  let swipeStartX = 0, swipeStartY = 0;
+  let swipeStartX = 0, swipeStartY = 0, swipeLocked = false;
   sidebar.addEventListener('touchstart', e => {
     swipeStartX = e.touches[0].clientX;
     swipeStartY = e.touches[0].clientY;
+    swipeLocked = false;
   }, { passive: true });
+  // Non-passive so we can preventDefault and block browser back-swipe
+  sidebar.addEventListener('touchmove', e => {
+    const dx = e.touches[0].clientX - swipeStartX;
+    const dy = e.touches[0].clientY - swipeStartY;
+    if (!swipeLocked && Math.abs(dx) > 8) swipeLocked = true;
+    if (swipeLocked && Math.abs(dx) > Math.abs(dy) * 1.2) e.preventDefault();
+  }, { passive: false });
   sidebar.addEventListener('touchend', e => {
     const dx = e.changedTouches[0].clientX - swipeStartX;
     const dy = e.changedTouches[0].clientY - swipeStartY;
