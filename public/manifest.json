@@ -1,0 +1,16 @@
+{
+    "name": "LingLo Reader",
+    "short_name": "LingLo",
+    "start_url": "/library",
+    "display": "standalone",
+    "background_color": "#0d0d1a",
+    "theme_color": "#a78bfa",
+    "icons": [
+        {
+            "src": "/favicon.svg",
+            "sizes": "192x192 512x512",
+            "type": "image/svg+xml",
+            "purpose": "any maskable"
+        }
+    ]
+}

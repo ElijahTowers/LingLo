@@ -21,3 +21,4 @@ piper/libtashkeel_model.ort
 piper/*.dylib
 piper/*.dSYM/
 piper/pkgconfig/
+.env

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Dark background pill -->
+  <rect width="32" height="32" rx="7" fill="#0f0e17"/>
+  <!-- Left page -->
+  <path d="M5 9.5 C5 9 5.5 8.5 6 8.5 C9 8.5 12.5 9.5 15 11 L15 23.5 C12.5 22 9 21 6 21.5 C5.5 21.5 5 21 5 20.5 Z" fill="#a78bfa"/>
+  <!-- Right page -->
+  <path d="M27 9.5 C27 9 26.5 8.5 26 8.5 C23 8.5 19.5 9.5 17 11 L17 23.5 C19.5 22 23 21 26 21.5 C26.5 21.5 27 21 27 20.5 Z" fill="#c4b5fd"/>
+  <!-- Spine -->
+  <rect x="15" y="8.5" width="2" height="15" rx="1" fill="#7c3aed"/>
+  <!-- Speech bubble dot - language indicator -->
+  <circle cx="24" cy="7" r="4" fill="#0f0e17"/>
+  <circle cx="24" cy="7" r="3" fill="#a78bfa"/>
+  <text x="24" y="10" text-anchor="middle" font-size="4.5" font-family="sans-serif" font-weight="bold" fill="#0f0e17">es</text>
+</svg>

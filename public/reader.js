@@ -2,6 +2,53 @@ const params = new URLSearchParams(location.search);
 const bookId = params.get('book');
 if (!bookId) location.href = '/';
 
+// ── Sentence translation helpers ──
+function hlToHtml(text) {
+  return text
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/\[HL\]/g, '<span class="hl">').replace(/\[\/HL\]/g, '</span>');
+}
+async function fetchSentenceTranslation(word, sentence) {
+  const res = await fetch('/api/translate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text: word, sentence, type: 'context-combined' })
+  });
+  if (!res.ok) throw new Error();
+  let out = '';
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    out += decoder.decode(value, { stream: true });
+  }
+  return out.trim();
+}
+
+// ── Rarity helpers ──
+const rarityCache = new Map();
+async function fetchRarity(words) {
+  const needed = words.filter(w => !rarityCache.has(w));
+  if (needed.length > 0) {
+    try {
+      const res = await fetch('/api/rarity', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ words: needed }) });
+      const data = await res.json();
+      Object.entries(data).forEach(([w, v]) => rarityCache.set(w, v));
+    } catch { needed.forEach(w => rarityCache.set(w, null)); }
+  }
+  return words.map(w => rarityCache.get(w) ?? null);
+}
+function rarityBadge(zipf) {
+  if (zipf === null || zipf === undefined) return '';
+  let label, cls;
+  if (zipf >= 5)      { label = 'Common';    cls = 'rarity-common'; }
+  else if (zipf >= 3) { label = 'Moderate';  cls = 'rarity-moderate'; }
+  else if (zipf >= 1) { label = 'Rare';      cls = 'rarity-rare'; }
+  else                { label = 'Very rare'; cls = 'rarity-very-rare'; }
+  return `<span class="rarity ${cls}">${label}</span>`;
+}
+
 let chapters = [];
 let currentIndex = 0;
 let currentChapterTitle = '';
@@ -16,10 +63,13 @@ let searchCurrent = -1;
 let currentPage = 0;
 let totalPages = 1;
 let pageWidth = 0;
+let wordsPerPage = 0;
+let loggedPages = new Set();
 let paginationTimer = null;
 
 // ── Init ──
 async function init() {
+  renderReaderStreakCircle();
   await Promise.all([loadSavedWords(), loadChapters()]);
   const saved = parseInt(localStorage.getItem(`linglo-chapter-${bookId}`)) || 0;
   await loadChapter(saved);
@@ -50,7 +100,7 @@ async function loadChapter(index, goToLast = false) {
   const readSet = new Set(JSON.parse(localStorage.getItem(`linglo-read-${bookId}`) || '[]'));
   readSet.add(index);
   localStorage.setItem(`linglo-read-${bookId}`, JSON.stringify([...readSet]));
-  updateStreak();
+  loggedPages = new Set();
 
   // Clear search state
   clearSearchHighlights();
@@ -182,6 +232,9 @@ async function activatePhrase(selected, startSpan) {
     // Mobile: show inline popup above the first selected word
     showPopup(text, startSpan);
     speak(text);
+    const popupSentTrans = document.getElementById('popup-sentence-translation');
+    popupSentTrans.textContent = '';
+    popupSentTrans.classList.remove('visible');
     try {
       const res = await fetch('/api/translate', {
         method: 'POST',
@@ -203,6 +256,15 @@ async function activatePhrase(selected, startSpan) {
     } catch {
       popupTranslation.textContent = 'Translation failed';
       popupTranslation.className = 'popup-translation';
+    }
+    // Auto-translate context sentence
+    if (currentSentence) {
+      fetchSentenceTranslation(text, currentSentence)
+        .then(result => {
+          popupSentTrans.innerHTML = hlToHtml(result);
+          popupSentTrans.classList.add('visible');
+          positionPopup(startSpan);
+        }).catch(() => {});
     }
   } else {
     if (!sidebarOpen) openSidebar();
@@ -234,6 +296,16 @@ async function activatePhrase(selected, startSpan) {
       transEl.className = 'sidebar-translation';
     }
     updateSaveBtn(text);
+
+    // Auto-translate the context sentence
+    if (currentSentence) {
+      const sentTransEl = document.getElementById('sentence-translation');
+      sentTransEl.innerHTML = '';
+      sentTransEl.classList.add('visible');
+      fetchSentenceTranslation(text, currentSentence)
+        .then(result => { sentTransEl.innerHTML = hlToHtml(result); })
+        .catch(() => { sentTransEl.innerHTML = ''; sentTransEl.classList.remove('visible'); });
+    }
   }
 
   // Check for idioms if multi-word selection
@@ -407,6 +479,10 @@ function showWordView(word, sentence) {
   document.getElementById('sidebar-empty').style.display = 'none';
   document.getElementById('word-view').style.display = 'flex';
   document.getElementById('sidebar-word').textContent = word;
+  document.getElementById('rarity-badge').innerHTML = '';
+  fetchRarity([word]).then(([zipf]) => {
+    document.getElementById('rarity-badge').innerHTML = rarityBadge(zipf);
+  });
   document.getElementById('sidebar-translation').textContent = '';
   document.getElementById('sidebar-translation').className = 'sidebar-translation';
 
@@ -442,6 +518,7 @@ function showWordView(word, sentence) {
   conjEl.classList.remove('visible');
   document.getElementById('conjugate-btn').textContent = '⊞ Conjugate';
 
+
   // Reset idiom
   const idiomEl = document.getElementById('idiom-note');
   idiomEl.textContent = '';
@@ -456,12 +533,14 @@ function showWordView(word, sentence) {
 function clearWordView() {
   document.getElementById('sidebar-empty').style.display = '';
   document.getElementById('word-view').style.display = 'none';
+  document.getElementById('rarity-badge').innerHTML = '';
   document.getElementById('explanation').textContent = '';
   document.getElementById('explanation').classList.remove('visible');
   document.getElementById('explain-model').textContent = '';
   document.getElementById('explain-model').classList.remove('visible');
   document.getElementById('conjugation').textContent = '';
   document.getElementById('conjugation').classList.remove('visible');
+
   document.getElementById('idiom-note').textContent = '';
   document.getElementById('idiom-note').classList.remove('visible');
   document.getElementById('sentence-translation').textContent = '';
@@ -574,34 +653,7 @@ document.getElementById('conjugate-btn').addEventListener('click', async () => {
   btn.disabled = false;
 });
 
-// ── Sentence translate ──
-document.getElementById('sentence-translate-btn').addEventListener('click', async () => {
-  const el = document.getElementById('sentence-translation');
-  const btn = document.getElementById('sentence-translate-btn');
-  btn.disabled = true;
-  el.textContent = 'Translating…';
-  el.classList.add('visible');
 
-  try {
-    const res = await fetch('/api/translate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: currentSentence })
-    });
-    if (!res.ok) throw new Error();
-    el.textContent = '';
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      el.textContent += decoder.decode(value, { stream: true });
-    }
-  } catch {
-    el.textContent = 'Translation failed.';
-  }
-  btn.disabled = false;
-});
 
 // ── Words tab ──
 async function loadWordsTab() {
@@ -623,7 +675,7 @@ async function loadWordsTab() {
   list.innerHTML = words.map(w => `
     <div class="word-card" id="wc-${w.id}">
       <div class="word-card-body">
-        <div class="word-card-word">${w.word}</div>
+        <div class="word-card-word">${w.word} <span class="word-card-rarity" id="wr-${w.id}"></span></div>
         <div class="word-card-translation">${w.translation}</div>
         ${w.sentence ? `<div class="word-card-sentence">${w.sentence.slice(0, 100)}${w.sentence.length > 100 ? '…' : ''}</div>` : ''}
         ${w.chapter_title ? `<div class="word-card-chapter">${w.chapter_title}</div>` : ''}
@@ -631,6 +683,14 @@ async function loadWordsTab() {
       <button class="word-card-delete" data-id="${w.id}" title="Delete">✕</button>
     </div>
   `).join('');
+
+  // Fetch rarity for all words and update badges
+  fetchRarity(words.map(w => w.word)).then(scores => {
+    words.forEach((w, i) => {
+      const el = document.getElementById(`wr-${w.id}`);
+      if (el) el.outerHTML = rarityBadge(scores[i]);
+    });
+  });
 
   list.querySelectorAll('.word-card-delete').forEach(btn => {
     btn.addEventListener('click', async () => {
@@ -706,9 +766,17 @@ function showPopup(word, anchorEl) {
   popupWord.textContent = word;
   popupTranslation.textContent = 'Translating…';
   popupTranslation.className = 'popup-translation loading';
+  document.getElementById('popup-rarity').innerHTML = '';
+  const pst = document.getElementById('popup-sentence-translation');
+  pst.textContent = '';
+  pst.classList.remove('visible');
   wordPopup.classList.add('visible');
   positionPopup(anchorEl);
   if (isMobile()) _pushOverlayHistory();
+  fetchRarity([word]).then(([zipf]) => {
+    document.getElementById('popup-rarity').innerHTML = rarityBadge(zipf);
+    positionPopup(anchorEl); // reposition after badge may change popup height
+  });
 }
 
 function positionPopup(anchorEl) {
@@ -746,6 +814,20 @@ document.getElementById('popup-more-btn').addEventListener('click', (e) => {
     transEl.className = 'sidebar-translation';
     updateSaveBtn(currentWord);
   }
+
+  // Copy sentence translation from popup if already loaded, else trigger it
+  const popupSentEl = document.getElementById('popup-sentence-translation');
+  const sentTransEl = document.getElementById('sentence-translation');
+  if (popupSentEl.innerHTML.trim()) {
+    sentTransEl.innerHTML = popupSentEl.innerHTML;
+    sentTransEl.classList.add('visible');
+  } else if (currentSentence) {
+    sentTransEl.innerHTML = '';
+    sentTransEl.classList.add('visible');
+    fetchSentenceTranslation(currentWord, currentSentence)
+      .then(result => { sentTransEl.innerHTML = hlToHtml(result); })
+      .catch(() => { sentTransEl.innerHTML = ''; sentTransEl.classList.remove('visible'); });
+  }
 });
 
 // Dismiss popup on tap outside
@@ -767,7 +849,7 @@ function openSidebar() {
     clearTimeout(paginationTimer);
     paginationTimer = setTimeout(() => {
       const ratio = totalPages > 1 ? currentPage / (totalPages - 1) : 0;
-      setupPagination(ratio);
+      setupPagination(ratio, true);
     }, 270);
   }
 }
@@ -783,7 +865,7 @@ function closeSidebar(fromPopstate = false) {
     clearTimeout(paginationTimer);
     paginationTimer = setTimeout(() => {
       const ratio = totalPages > 1 ? currentPage / (totalPages - 1) : 0;
-      setupPagination(ratio);
+      setupPagination(ratio, true);
     }, 270);
   }
 }
@@ -793,20 +875,7 @@ document.getElementById('sidebar-toggle').addEventListener('click', () => {
 });
 
 // ── Chapter navigation ──
-document.getElementById('prev-btn').addEventListener('click', () => {
-  if (currentPage > 0) goToPage(currentPage - 1);
-  else loadChapter(currentIndex - 1, true);
-});
-document.getElementById('next-btn').addEventListener('click', () => {
-  if (currentPage < totalPages - 1) goToPage(currentPage + 1);
-  else loadChapter(currentIndex + 1);
-});
-
 function updateNav() {
-  const onFirst = currentPage <= 0;
-  const onLast = currentPage >= totalPages - 1;
-  document.getElementById('prev-btn').disabled = onFirst && currentIndex <= 0;
-  document.getElementById('next-btn').disabled = onLast && currentIndex >= chapters.length - 1;
   const pageInfo = totalPages > 1 ? ` · ${currentPage + 1}/${totalPages}` : '';
   document.getElementById('chapter-counter').textContent =
     chapters.length ? `${currentIndex + 1}/${chapters.length}${pageInfo}` : '';
@@ -955,60 +1024,57 @@ document.getElementById('search-input').addEventListener('keydown', e => {
 });
 
 // ── Reading stats ──
-function updateStreak() {
-  const today = new Date().toDateString();
-  const last = localStorage.getItem('linglo-streak-last');
-  if (last === today) return;
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  let streak = parseInt(localStorage.getItem('linglo-streak-count') || '0');
-  streak = (last === yesterday.toDateString()) ? streak + 1 : 1;
-  localStorage.setItem('linglo-streak-last', today);
-  localStorage.setItem('linglo-streak-count', streak);
+function todayStr() {
+  return new Date().toISOString().split('T')[0];
 }
 
-function getStreak() {
-  const today = new Date().toDateString();
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  const last = localStorage.getItem('linglo-streak-last');
-  if (last !== today && last !== yesterday.toDateString()) return 0;
-  return parseInt(localStorage.getItem('linglo-streak-count') || '0');
+function logWordsRead(count) {
+  const today = todayStr();
+  const storedDate = localStorage.getItem('linglo-daily-date');
+  let dailyWords = storedDate === today ? parseInt(localStorage.getItem('linglo-daily-words') || '0') : 0;
+  const wasGoalMet = dailyWords >= 500;
+  dailyWords += count;
+  localStorage.setItem('linglo-daily-date', today);
+  localStorage.setItem('linglo-daily-words', String(dailyWords));
+  if (!wasGoalMet && dailyWords >= 500) {
+    const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
+    const yStr = yesterday.toISOString().split('T')[0];
+    const last = localStorage.getItem('linglo-streak-last');
+    if (last !== today) {
+      let streak = parseInt(localStorage.getItem('linglo-streak-count') || '0');
+      streak = (last === yStr) ? streak + 1 : 1;
+      localStorage.setItem('linglo-streak-last', today);
+      localStorage.setItem('linglo-streak-count', String(streak));
+    }
+  }
+  renderReaderStreakCircle();
 }
 
-function loadStatsTab() {
-  const panel = document.getElementById('stats-panel');
-  const readChapters = JSON.parse(localStorage.getItem(`linglo-read-${bookId}`) || '[]');
-  const streak = getStreak();
-  const wordCount = savedWords.size;
-  const pct = chapters.length ? Math.round((readChapters.length / chapters.length) * 100) : 0;
-
-  panel.innerHTML = `
-    <div class="stat-card">
-      <div class="stat-icon">📖</div>
-      <div>
-        <div class="stat-value">${readChapters.length}</div>
-        <div class="stat-label">Chapters Read</div>
-        <div class="stat-sub">${pct}% of ${chapters.length} chapters</div>
-      </div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-icon">💾</div>
-      <div>
-        <div class="stat-value">${wordCount}</div>
-        <div class="stat-label">Words Saved</div>
-        <div class="stat-sub">in this book</div>
-      </div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-icon stat-streak-fire">🔥</div>
-      <div>
-        <div class="stat-value">${streak}</div>
-        <div class="stat-label">Day Streak</div>
-        <div class="stat-sub">${streak >= 7 ? 'Incredible! 🎉' : streak >= 3 ? 'On fire!' : streak === 1 ? 'Good start!' : 'Read daily to build a streak'}</div>
-      </div>
-    </div>
-  `;
+function renderReaderStreakCircle() {
+  const el = document.getElementById('reader-streak-circle');
+  if (!el) return;
+  const today = todayStr();
+  const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
+  const yStr = yesterday.toISOString().split('T')[0];
+  const last = localStorage.getItem('linglo-streak-last');
+  const streak = (last === today || last === yStr) ? parseInt(localStorage.getItem('linglo-streak-count') || '0') : 0;
+  const dailyWords = localStorage.getItem('linglo-daily-date') === today
+    ? parseInt(localStorage.getItem('linglo-daily-words') || '0') : 0;
+  const pct = Math.min(100, Math.round(dailyWords / 500 * 100));
+  const goalMet = pct >= 100;
+  const r = 11, size = 28, circ = +(2 * Math.PI * r).toFixed(2);
+  const offset = +(circ * (1 - pct / 100)).toFixed(2);
+  const stroke = goalMet ? '#34d399' : '#a78bfa';
+  const label = streak > 0 ? String(streak) : '';
+  const fs = streak > 99 ? 6 : 8;
+  el.innerHTML = `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+    <circle cx="14" cy="14" r="${r}" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="2.5"/>
+    <circle cx="14" cy="14" r="${r}" fill="none" stroke="${stroke}" stroke-width="2.5"
+      stroke-dasharray="${circ}" stroke-dashoffset="${offset}"
+      stroke-linecap="round" transform="rotate(-90 14 14)"/>
+    <text x="14" y="14" text-anchor="middle" dominant-baseline="central"
+      font-size="${fs}" font-weight="700" fill="${goalMet ? '#34d399' : 'currentColor'}" font-family="system-ui,sans-serif">${label}</text>
+  </svg>`;
 }
 
 // ── Page summary ──
@@ -1057,21 +1123,22 @@ document.getElementById('summarize-btn').addEventListener('click', async () => {
 });
 
 // ── Pagination ──
-function setupPagination(restoreRatio = 0) {
+function setupPagination(restoreRatio = 0, keepSummary = false) {
   const textCol = document.getElementById('text-column');
   const pages = document.getElementById('chapter-pages');
   if (!pages) return;
   const W = textCol.clientWidth;
-  const summaryBarH = document.getElementById('page-summary-bar').offsetHeight;
+  const summaryBar = document.getElementById('page-summary-bar');
+  const summaryBarH = summaryBar ? (summaryBar.offsetHeight || 54) : 54;
   const H = textCol.clientHeight - summaryBarH;
-  if (W === 0 || H === 0) return;
+  if (W === 0 || H <= 0) return;
   pageWidth = W;
 
   const readableWidth = 680;
   const minPad = 24;
   const hPad = W > readableWidth + 2 * minPad ? Math.round((W - readableWidth) / 2) : minPad;
   document.getElementById('chapter-title').style.padding = `48px ${hPad}px 24px`;
-  document.getElementById('content').style.padding = `0 ${hPad}px 120px`;
+  document.getElementById('content').style.padding = `0 ${hPad}px 24px`;
 
   pages.style.height = H + 'px';
   pages.style.columnWidth = W + 'px';
@@ -1081,22 +1148,30 @@ function setupPagination(restoreRatio = 0) {
 
   requestAnimationFrame(() => {
     totalPages = Math.max(1, Math.ceil(pages.scrollWidth / W));
+    const totalWordEls = document.querySelectorAll('#content .word').length;
+    wordsPerPage = totalPages > 0 ? Math.round(totalWordEls / totalPages) : 0;
     const target = restoreRatio >= 1 ? totalPages - 1 : Math.round(restoreRatio * (totalPages - 1));
     currentPage = -1;
-    goToPage(target);
+    goToPage(target, keepSummary);
   });
 }
 
-function goToPage(n) {
+function goToPage(n, keepSummary = false) {
   n = Math.max(0, Math.min(n, totalPages - 1));
   currentPage = n;
+  if (wordsPerPage > 0 && !loggedPages.has(n)) {
+    loggedPages.add(n);
+    logWordsRead(wordsPerPage);
+  }
   const pages = document.getElementById('chapter-pages');
   if (pages) pages.style.transform = `translateX(${-n * pageWidth}px)`;
   const pct = totalPages > 1 ? n / (totalPages - 1) : 1;
   document.getElementById('progress-bar').style.width = (pct * 100) + '%';
-  document.getElementById('page-summary-text').textContent = '';
-  document.getElementById('summarize-btn').textContent = '✦ Summarize this page';
-  document.getElementById('summarize-btn').disabled = false;
+  if (!keepSummary) {
+    document.getElementById('page-summary-text').textContent = '';
+    document.getElementById('summarize-btn').textContent = '✦ Summarize this page';
+    document.getElementById('summarize-btn').disabled = false;
+  }
   updateNav();
 }
 
@@ -1105,10 +1180,21 @@ const resizeObserver = new ResizeObserver(() => {
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(() => {
     const ratio = totalPages > 1 ? currentPage / (totalPages - 1) : 0;
-    setupPagination(ratio);
+    setupPagination(ratio, true);
   }, 300);
 });
 resizeObserver.observe(document.getElementById('text-column'));
+
+// Re-paginate when the summary bar grows/shrinks (e.g. summary text streaming in).
+// keepSummary=true prevents goToPage from clearing the summary text (no feedback loop).
+const summaryBarObserver = new ResizeObserver(() => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    const ratio = totalPages > 1 ? currentPage / (totalPages - 1) : 0;
+    setupPagination(ratio, true);
+  }, 150);
+});
+summaryBarObserver.observe(document.getElementById('page-summary-bar'));
 
 // ── Click zones (left 30% = prev, right 30% = next) ──
 document.getElementById('text-column').addEventListener('click', e => {

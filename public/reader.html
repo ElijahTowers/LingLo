@@ -7,7 +7,7 @@
   <title>LingLo Reader</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Lora:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=4.38">
   <style>
     html, body {
       height: 100%;
@@ -22,9 +22,7 @@
 
     /* ── Header ── */
     .reader-header {
-      background: rgba(13, 13, 26, 0.92);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
+      background: var(--bg);
       border-bottom: 1px solid var(--border);
       flex-shrink: 0;
       z-index: 200;
@@ -127,7 +125,7 @@
       font-family: var(--font-read);
       font-size: 1.12rem;
       line-height: 1.92;
-      color: #bfbad0;
+      color: var(--text-muted);
       user-select: none;
       -webkit-user-select: none;
     }
@@ -138,7 +136,7 @@
       margin: 1.6em 0 0.8em;
     }
     #content em { font-style: italic; }
-    #content strong { font-weight: 600; color: #d8d4e8; }
+    #content strong { font-weight: 600; color: var(--text); }
 
     /* Word spans */
     #content .word {
@@ -148,12 +146,12 @@
     }
     #content .word:hover { background: var(--yellow); }
     #content .word.active {
-      background: rgba(167, 139, 250, 0.25);
-      color: #e8e0ff;
+      background: rgba(212, 135, 74, 0.22);
+      color: var(--text);
     }
     #content .word.drag-sel {
-      background: rgba(167, 139, 250, 0.2);
-      color: #e8e0ff;
+      background: rgba(212, 135, 74, 0.18);
+      color: var(--text);
     }
     #content .word.saved {
       border-bottom: 2px solid rgba(52, 211, 153, 0.4);
@@ -292,7 +290,7 @@
       font-family: var(--font-ui);
     }
     #save-btn { background: var(--purple-dim); color: white; }
-    #save-btn:hover { background: var(--purple); color: #0d0d1a; }
+    #save-btn:hover { background: var(--purple); color: white; }
     #save-btn.saved { background: rgba(52, 211, 153, 0.15); color: var(--green); border: 1px solid rgba(52,211,153,0.25); cursor: default; }
     #explain-btn { background: rgba(255,255,255,0.05); color: var(--text-muted); border: 1px solid var(--border-strong); }
     #explain-btn:hover { background: var(--purple-glow); color: var(--purple); border-color: var(--purple); }
@@ -389,9 +387,7 @@
       position: fixed;
       top: 54px;
       left: 0; right: 0;
-      background: rgba(13, 13, 26, 0.95);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
+      background: var(--bg);
       border-bottom: 1px solid var(--border);
       padding: 8px 20px;
       display: flex;
@@ -474,7 +470,7 @@
       bottom: 10px;
       right: 14px;
       font-size: 0.65rem;
-      color: rgba(167,139,250,0.35);
+      color: rgba(212,135,74,0.3);
       letter-spacing: 0.04em;
       pointer-events: none;
       user-select: none;
@@ -483,36 +479,46 @@
     /* ── Mobile inline word popup ── */
     #word-popup {
       position: fixed;
-      background: #1a1828;
-      border: 1px solid #3a3660;
+      background: var(--surface2);
+      border: 1px solid var(--border-strong);
       border-radius: 14px;
       padding: 14px 16px 12px;
       min-width: 180px;
       max-width: min(300px, 88vw);
       z-index: 450;
       display: none;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.55);
+      box-shadow: var(--shadow-lg);
       transform: translateX(-50%);
     }
     #word-popup.visible { display: block; }
+    #popup-rarity { margin-bottom: 6px; }
     #word-popup .popup-word {
       font-size: 1.05rem;
       font-weight: 700;
-      color: #e8e4f0;
+      color: var(--text);
       margin-bottom: 5px;
       word-break: break-word;
     }
     #word-popup .popup-translation {
       font-size: 0.9rem;
-      color: #a78bfa;
+      color: var(--purple);
       min-height: 18px;
       line-height: 1.4;
       word-break: break-word;
     }
     #word-popup .popup-translation.loading {
-      color: rgba(167,139,250,0.45);
+      color: var(--text-muted);
       font-style: italic;
     }
+    #word-popup .popup-sentence-translation {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      line-height: 1.4;
+      margin-top: 5px;
+      font-style: italic;
+      display: none;
+    }
+    #word-popup .popup-sentence-translation.visible { display: block; }
     #word-popup .popup-actions {
       display: flex;
       gap: 8px;
@@ -520,23 +526,23 @@
     }
     #word-popup .popup-btn {
       flex: 1;
-      background: rgba(167,139,250,0.12);
-      border: 1px solid rgba(167,139,250,0.25);
+      background: var(--purple-glow);
+      border: 1px solid var(--border-strong);
       border-radius: 8px;
-      color: #c4b5fd;
+      color: var(--purple);
       font-size: 0.78rem;
       padding: 6px 0;
       cursor: pointer;
       font-weight: 500;
       transition: background 0.15s;
     }
-    #word-popup .popup-btn:active { background: rgba(167,139,250,0.25); }
+    #word-popup .popup-btn:active { background: rgba(212,135,74,0.2); }
     #word-popup .popup-btn.primary {
-      background: #a78bfa;
-      border-color: #a78bfa;
+      background: var(--purple-dim);
+      border-color: var(--purple-dim);
       color: #fff;
     }
-    #word-popup .popup-btn.primary:active { background: #9061f9; }
+    #word-popup .popup-btn.primary:active { background: var(--purple); }
     /* Arrow pointing down to word */
     #word-popup::after {
       content: '';
@@ -547,29 +553,11 @@
       width: 0; height: 0;
       border-left: 7px solid transparent;
       border-right: 7px solid transparent;
-      border-top: 7px solid #3a3660;
+      border-top: 7px solid var(--border-strong);
     }
 
     /* Sentence translate */
-    .sentence-translate-row {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      margin-top: 10px;
-    }
-    #sentence-translate-btn {
-      background: none;
-      border: 1px solid var(--border-strong);
-      border-radius: 5px;
-      color: var(--text-muted);
-      font-size: 0.72rem;
-      cursor: pointer;
-      padding: 3px 8px;
-      transition: all 0.12s;
-      font-family: var(--font-ui);
-      white-space: nowrap;
-    }
-    #sentence-translate-btn:hover { color: var(--purple); border-color: var(--purple); }
+
     #sentence-translation {
       margin-top: 6px;
       font-size: 0.82rem;
@@ -578,10 +566,29 @@
       display: none;
     }
     #sentence-translation.visible { display: block; }
+    #sentence-translation .hl { color: var(--purple); font-style: normal; font-weight: 600; }
+    #word-popup .popup-sentence-translation .hl { color: var(--purple); font-style: normal; font-weight: 600; }
 
     /* Conjugation */
+    /* ── Rarity badge ── */
+    .rarity {
+      display: inline-block;
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      padding: 2px 8px;
+      border-radius: 20px;
+      margin-bottom: 6px;
+    }
+    .rarity-common  { background: rgba(34,197,94,0.12);  color: #22c55e; border: 1px solid rgba(34,197,94,0.25); }
+    .rarity-moderate{ background: rgba(234,179,8,0.12);  color: #ca8a04; border: 1px solid rgba(234,179,8,0.25); }
+    .rarity-rare    { background: rgba(249,115,22,0.12); color: #ea580c; border: 1px solid rgba(249,115,22,0.25); }
+    .rarity-very-rare{ background: rgba(239,68,68,0.12); color: #ef4444; border: 1px solid rgba(239,68,68,0.25); }
+
     #conjugate-btn { background: rgba(255,255,255,0.05); color: var(--text-muted); border: 1px solid var(--border-strong); }
     #conjugate-btn:hover { background: var(--purple-glow); color: var(--purple); border-color: var(--purple); }
+
     #conjugation {
       margin-top: 10px;
       font-size: 0.82rem;
@@ -614,7 +621,7 @@
       bottom: 0;
       left: 0;
       right: 380px;
-      background: rgba(13, 13, 26, 0.95);
+      background: var(--surface);
       backdrop-filter: blur(12px);
       -webkit-backdrop-filter: blur(12px);
       border-top: 1px solid var(--border);
@@ -624,6 +631,8 @@
       display: flex;
       align-items: flex-start;
       gap: 14px;
+      max-height: 40vh;
+      overflow-y: auto;
     }
     #summarize-btn {
       background: none;
@@ -756,9 +765,59 @@
     @media (max-width: 480px) {
       .reader-header .btn-primary { display: none; }
     }
+
+    /* ── Theme: light ── */
+    body.theme-light .reader-header { background: var(--bg); }
+    body.theme-light .search-bar { background: var(--bg); }
+    body.theme-light .page-summary-bar { background: var(--surface); }
+    body.theme-light #content { color: var(--text); }
+    body.theme-light #content strong { color: var(--text); }
+    body.theme-light #word-popup { background: var(--surface2); border-color: var(--border-strong); box-shadow: var(--shadow-lg); }
+    body.theme-light #word-popup .popup-word { color: var(--text); }
+    body.theme-light #word-popup .popup-translation { color: var(--purple); }
+    body.theme-light #word-popup .popup-sentence-translation { color: var(--text-muted); }
+    body.theme-light #word-popup::after { border-top-color: var(--border-strong); }
+    body.theme-light #word-popup .popup-btn { background: var(--purple-glow); border-color: var(--border-strong); color: var(--purple); }
+    body.theme-light #word-popup .popup-btn.primary { background: var(--purple-dim); border-color: var(--purple-dim); color: #fff; }
+    body.theme-light .toc-item-num { color: rgba(0,0,0,0.3); }
+    body.theme-light .stat-sub { color: rgba(0,0,0,0.3); }
+    body.theme-light .word-card-chapter { color: rgba(0,0,0,0.3); }
+    body.theme-light .word-card-delete { color: rgba(0,0,0,0.2); }
+    body.theme-light .tab-panel::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); }
+
+    /* ── Theme: e-ink ── */
+    body.theme-ereader .reader-header { background: #ffffff; border-bottom-color: rgba(0,0,0,0.2); }
+    body.theme-ereader .search-bar { background: #ffffff; border-bottom-color: rgba(0,0,0,0.2); }
+    body.theme-ereader .page-summary-bar { background: var(--surface); border-top-color: rgba(0,0,0,0.2); }
+    body.theme-ereader #content { color: #000000; }
+    body.theme-ereader #content strong { color: #000000; }
+    body.theme-ereader #word-popup { background: #ffffff; border-color: rgba(0,0,0,0.35); box-shadow: none; }
+    body.theme-ereader #word-popup .popup-word { color: #000000; }
+    body.theme-ereader #word-popup .popup-translation { color: #000000; }
+    body.theme-ereader #word-popup::after { border-top-color: rgba(0,0,0,0.35); }
+    body.theme-ereader #word-popup .popup-btn { background: #eeeeee; border-color: rgba(0,0,0,0.25); color: #000000; }
+    body.theme-ereader #word-popup .popup-btn.primary { background: #222222; border-color: #222222; color: #ffffff; }
+    body.theme-ereader .toc-item-num { color: rgba(0,0,0,0.35); }
+    body.theme-ereader .stat-sub { color: rgba(0,0,0,0.35); }
+    body.theme-ereader .word-card-chapter { color: rgba(0,0,0,0.35); }
+    body.theme-ereader .word-card-delete { color: rgba(0,0,0,0.25); }
+    body.theme-ereader .tab-panel::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); }
+    body.theme-ereader #version-badge { color: rgba(0,0,0,0.45); }
+    body.theme-ereader #explain-model { color: rgba(0,0,0,0.3); }
+    body.theme-ereader .toc-dropdown::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); }
   </style>
 </head>
 <body>
+  <script>
+    (function() {
+      try {
+        var s = JSON.parse(localStorage.getItem('linglo_settings') || '{}');
+        var t = s.theme || 'dark';
+        if (t === 'light') document.body.classList.add('theme-light');
+        if (t === 'ereader') document.body.classList.add('theme-ereader');
+      } catch(e) {}
+    })();
+  </script>
   <div class="progress-bar" id="progress-bar" style="width:0%"></div>
 
   <header class="reader-header">
@@ -766,14 +825,13 @@
       <a class="logo" href="/">LingLo</a>
       <span class="reader-book-title" id="book-title">Loading…</span>
       <div class="chapter-nav">
-        <button id="prev-btn" disabled title="Previous chapter">←</button>
         <div class="toc-wrapper">
           <button id="toc-btn" title="Table of Contents">☰</button>
           <div class="toc-dropdown" id="toc-dropdown"></div>
         </div>
         <span class="chapter-counter" id="chapter-counter"></span>
-        <button id="next-btn" disabled title="Next chapter">→</button>
       </div>
+      <div id="reader-streak-circle" style="flex-shrink:0;display:flex;align-items:center"></div>
       <a href="/flashcards.html" class="btn btn-primary btn-sm">✦ Cards</a>
       <button class="sidebar-toggle" id="search-btn" title="Search (Ctrl+F)">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -806,8 +864,6 @@
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-tabs">
         <button class="tab-btn active" data-tab="translate">Translate</button>
-        <button class="tab-btn" data-tab="words" id="words-tab-btn">Words</button>
-        <button class="tab-btn" data-tab="stats">Stats</button>
       </div>
 
       <!-- Translate panel -->
@@ -818,6 +874,7 @@
         </div>
         <div class="word-view" id="word-view" style="display:none">
           <div class="sidebar-word" id="sidebar-word"></div>
+          <div id="rarity-badge"></div>
           <div class="sidebar-translation" id="sidebar-translation"></div>
           <div id="idiom-note"></div>
           <div class="sidebar-actions">
@@ -825,34 +882,22 @@
             <button id="speak-btn">🔊 Speak</button>
             <button id="conjugate-btn">⊞ Conjugate</button>
             <button id="explain-btn">✦ Explain</button>
+
           </div>
           <div id="conjugation"></div>
           <div class="sidebar-divider"></div>
           <div class="sidebar-sentence-label">Context</div>
           <div class="sidebar-sentence" id="sidebar-sentence"></div>
-          <div class="sentence-translate-row">
-            <button id="sentence-translate-btn">↔ Translate sentence</button>
-          </div>
           <div id="sentence-translation"></div>
           <div class="sidebar-explain-area">
             <div id="explanation"></div>
             <div id="explain-model"></div>
           </div>
+
         </div>
       </div>
 
-      <!-- Words panel -->
-      <div class="tab-panel hidden" id="panel-words">
-        <div class="words-toolbar">
-          <span class="words-count" id="words-count"></span>
-        </div>
-        <div class="words-list" id="words-list"></div>
-      </div>
 
-      <!-- Stats panel -->
-      <div class="tab-panel hidden" id="panel-stats">
-        <div class="stats-panel" id="stats-panel"></div>
-      </div>
       <div id="version-badge"></div>
     </aside>
   </div>
@@ -873,12 +918,14 @@
   <!-- Mobile inline translation popup -->
   <div id="word-popup">
     <div class="popup-word" id="popup-word"></div>
+    <div id="popup-rarity"></div>
     <div class="popup-translation loading" id="popup-translation">Translating…</div>
+    <div class="popup-sentence-translation" id="popup-sentence-translation"></div>
     <div class="popup-actions">
       <button class="popup-btn" id="popup-speak-btn">🔊 Speak</button>
       <button class="popup-btn primary" id="popup-more-btn">Details →</button>
     </div>
   </div>
-  <script src="reader.js"></script>
+  <script src="reader.js?v=4.37"></script>
 </body>
 </html>

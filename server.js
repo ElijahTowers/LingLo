@@ -1,40 +1,7 @@
 require('dotenv').config();
-const APP_VERSION = 'v1.7';
+const APP_VERSION = 'v4.39';
 const express = require('express');
-const qrcode = require('qrcode');
-const http = require('http');
-const { WebSocketServer } = require('ws');
-const pty = require('node-pty');
 const crypto = require('crypto');
-
-// ── Native TOTP (RFC 6238) — no external dependency ──
-function base32Decode(secret) {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
-  let bits = '';
-  for (const c of secret.toUpperCase().replace(/=+$/, '')) {
-    const i = chars.indexOf(c);
-    if (i >= 0) bits += i.toString(2).padStart(5, '0');
-  }
-  const bytes = [];
-  for (let i = 0; i + 8 <= bits.length; i += 8)
-    bytes.push(parseInt(bits.slice(i, i + 8), 2));
-  return Buffer.from(bytes);
-}
-
-function totpCode(secret, offset = 0) {
-  const key = base32Decode(secret);
-  const counter = BigInt(Math.floor(Date.now() / 1000 / 30) + offset);
-  const buf = Buffer.alloc(8);
-  buf.writeBigUInt64BE(counter);
-  const hmac = crypto.createHmac('sha1', key).update(buf).digest();
-  const pos = hmac[19] & 0xf;
-  const code = ((hmac[pos] & 0x7f) << 24 | hmac[pos+1] << 16 | hmac[pos+2] << 8 | hmac[pos+3]) % 1000000;
-  return code.toString().padStart(6, '0');
-}
-
-function verifyTOTP(token, secret) {
-  return [-1, 0, 1].some(w => totpCode(secret, w) === token);
-}
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -76,21 +43,13 @@ db.exec(`
 const PASSWORD = process.env.LINGLO_PASSWORD;
 if (!PASSWORD) { console.error('LINGLO_PASSWORD not set in .env'); process.exit(1); }
 
-const TOTP_SECRET = process.env.LINGLO_TOTP_SECRET;
-if (!TOTP_SECRET) { console.error('LINGLO_TOTP_SECRET not set in .env'); process.exit(1); }
-
 const sessions = new Set();
-const totpVerified = new Map(); // token -> expiry timestamp (8h)
-const usedTotpCodes = new Map(); // code -> expiry timestamp (prevent replay)
 
 // Rate limiting: ip -> { attempts, resetAt }
 const loginAttempts = new Map();
-const totpAttempts = new Map();
 
-const TOTP_SESSION_TTL = 8 * 60 * 60 * 1000; // 8 hours
 const RATE_WINDOW = 15 * 60 * 1000;           // 15 minutes
 const LOGIN_MAX = 10;                          // max password attempts per window
-const TOTP_MAX = 5;                            // max TOTP attempts per window
 
 function isRateLimited(map, ip, max) {
   const now = Date.now();
@@ -104,10 +63,7 @@ function isRateLimited(map, ip, max) {
 // Purge expired entries periodically
 setInterval(() => {
   const now = Date.now();
-  for (const [k, v] of totpVerified) if (now > v) totpVerified.delete(k);
-  for (const [k, v] of usedTotpCodes) if (now > v) usedTotpCodes.delete(k);
   for (const [k, v] of loginAttempts) if (now > v.resetAt) loginAttempts.delete(k);
-  for (const [k, v] of totpAttempts) if (now > v.resetAt) totpAttempts.delete(k);
 }, 60 * 1000);
 
 function createSession() {
@@ -124,14 +80,6 @@ function getToken(cookieHeader) {
 
 function isAuthed(cookieHeader) {
   return sessions.has(getToken(cookieHeader));
-}
-
-function isTerminalAuthed(cookieHeader) {
-  const token = getToken(cookieHeader);
-  if (!sessions.has(token)) return false;
-  const expiry = totpVerified.get(token);
-  if (!expiry || Date.now() > expiry) { totpVerified.delete(token); return false; }
-  return true;
 }
 
 function timingSafeCompare(a, b) {
@@ -171,36 +119,72 @@ app.get('/login', (req, res) => {
       display: flex;
       align-items: center;
       justify-content: center;
-      background: #0f0e17;
+      background: #1a1612;
       font-family: 'Inter', system-ui, sans-serif;
-      color: #e8e4f0;
+      color: #ede0cc;
+      transition: background 0.2s, color 0.2s;
     }
+    body.theme-light {
+      background: #faf7f2;
+      color: #1e1610;
+    }
+    body.theme-ereader {
+      background: #ffffff;
+      color: #000000;
+    }
+    body.theme-ereader * { transition: none !important; }
     .card {
-      background: #1a1828;
-      border: 1px solid #2a2840;
+      background: #231e18;
+      border: 1px solid rgba(255,255,255,0.1);
       border-radius: 16px;
       padding: 40px 36px;
       width: min(360px, 92vw);
     }
-    .logo { font-size: 1.6rem; font-weight: 700; letter-spacing: -0.5px; margin-bottom: 8px; }
-    .sub { font-size: 0.85rem; color: #7c7a8e; margin-bottom: 28px; }
-    label { font-size: 0.8rem; color: #7c7a8e; display: block; margin-bottom: 6px; }
+    body.theme-light .card {
+      background: #f2ece2;
+      border-color: rgba(0,0,0,0.12);
+    }
+    body.theme-ereader .card {
+      background: #ffffff;
+      border: 1px solid #000000;
+      box-shadow: none;
+    }
+    .logo { font-size: 1.6rem; font-weight: 700; font-family: 'Lora', Georgia, serif; letter-spacing: -0.3px; margin-bottom: 8px; color: #ede0cc; }
+    body.theme-light .logo { color: #1e1610; }
+    body.theme-ereader .logo { color: #000000; }
+    .sub { font-size: 0.85rem; color: rgba(237,224,204,0.45); margin-bottom: 28px; }
+    body.theme-light .sub { color: rgba(30,22,16,0.5); }
+    body.theme-ereader .sub { color: #555555; }
+    label { font-size: 0.8rem; color: rgba(237,224,204,0.45); display: block; margin-bottom: 6px; }
+    body.theme-light label { color: rgba(30,22,16,0.5); }
+    body.theme-ereader label { color: #555555; }
     input[type=password] {
       width: 100%;
-      background: #0f0e17;
-      border: 1px solid #2a2840;
+      background: #1a1612;
+      border: 1px solid rgba(255,255,255,0.11);
       border-radius: 8px;
       padding: 10px 14px;
-      color: #e8e4f0;
+      color: #ede0cc;
       font-size: 1rem;
       outline: none;
       transition: border-color 0.15s;
     }
-    input[type=password]:focus { border-color: #a78bfa; }
-    button {
+    body.theme-light input[type=password] {
+      background: #e8dfd0;
+      border-color: rgba(0,0,0,0.18);
+      color: #1e1610;
+    }
+    body.theme-ereader input[type=password] {
+      background: #ffffff;
+      border: 1px solid #000000;
+      color: #000000;
+    }
+    input[type=password]:focus { border-color: #d4874a; }
+    body.theme-ereader input[type=password]:focus { border-color: #000000; }
+    .signin-btn {
       margin-top: 16px;
       width: 100%;
-      background: #a78bfa;
+      background: #a85f2e;
       color: #fff;
       border: none;
       border-radius: 8px;
@@ -210,21 +194,90 @@ app.get('/login', (req, res) => {
       cursor: pointer;
       transition: background 0.15s;
     }
-    button:hover { background: #9061f9; }
-    .err { margin-top: 12px; font-size: 0.82rem; color: #f87171; }
+    .signin-btn:hover { background: #d4874a; }
+    body.theme-light .signin-btn { background: #8b4513; }
+    body.theme-light .signin-btn:hover { background: #7c3d0f; }
+    body.theme-ereader .signin-btn { background: #000000; color: #ffffff; }
+    body.theme-ereader .signin-btn:hover { background: #333333; }
+    .err { margin-top: 12px; font-size: 0.82rem; color: #e07070; }
+    body.theme-ereader .err { color: #000000; }
+    .theme-toggle {
+      display: flex;
+      gap: 6px;
+      margin-top: 20px;
+      justify-content: center;
+    }
+    .theme-btn {
+      flex: 1;
+      padding: 6px 0;
+      font-size: 0.78rem;
+      font-weight: 500;
+      border-radius: 6px;
+      cursor: pointer;
+      border: 1px solid rgba(255,255,255,0.11);
+      background: transparent;
+      color: rgba(237,224,204,0.45);
+      transition: all 0.15s;
+    }
+    body.theme-light .theme-btn { border-color: rgba(0,0,0,0.18); color: rgba(30,22,16,0.45); }
+    body.theme-ereader .theme-btn { border-color: #888888; color: #555555; }
+    .theme-btn.active {
+      background: #a85f2e;
+      border-color: #a85f2e;
+      color: #ffffff;
+    }
+    body.theme-light .theme-btn.active { background: #8b4513; border-color: #8b4513; }
+    body.theme-ereader .theme-btn.active { background: #000000; border-color: #000000; color: #ffffff; }
   </style>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;700&display=swap" rel="stylesheet">
 </head>
 <body>
+  <script>
+    (function() {
+      try {
+        var s = JSON.parse(localStorage.getItem('linglo_settings'));
+        if (s && s.theme === 'light') document.body.classList.add('theme-light');
+        if (s && s.theme === 'ereader') document.body.classList.add('theme-ereader');
+      } catch(e) {}
+    })();
+  </script>
   <div class="card">
     <div class="logo">LingLo</div>
     <div class="sub">Enter your password to continue</div>
     <form method="POST" action="/login">
       <label for="pw">Password</label>
       <input type="password" id="pw" name="password" autofocus autocomplete="current-password">
-      <button type="submit">Sign in</button>
+      <button type="submit" class="signin-btn">Sign in</button>
       ${err}
     </form>
+    <div class="theme-toggle">
+      <button class="theme-btn" id="btn-dark" onclick="setTheme('dark')">Dark</button>
+      <button class="theme-btn" id="btn-light" onclick="setTheme('light')">Light</button>
+      <button class="theme-btn" id="btn-ereader" onclick="setTheme('ereader')">E-ink</button>
+    </div>
   </div>
+  <script>
+    function getTheme() {
+      try { return (JSON.parse(localStorage.getItem('linglo_settings')) || {}).theme || 'dark'; } catch(e) { return 'dark'; }
+    }
+    function setTheme(t) {
+      try {
+        var s = JSON.parse(localStorage.getItem('linglo_settings')) || {};
+        s.theme = t;
+        localStorage.setItem('linglo_settings', JSON.stringify(s));
+      } catch(e) {}
+      document.body.classList.toggle('theme-light', t === 'light');
+      document.body.classList.toggle('theme-ereader', t === 'ereader');
+      updateButtons(t);
+    }
+    function updateButtons(t) {
+      ['dark','light','ereader'].forEach(function(name) {
+        document.getElementById('btn-' + name).classList.toggle('active', name === t);
+      });
+    }
+    updateButtons(getTheme());
+  </script>
 </body>
 </html>`);
 });
@@ -248,117 +301,6 @@ app.post('/logout', (req, res) => {
   const secure = req.headers['x-forwarded-proto'] === 'https' ? '; Secure' : '';
   res.setHeader('Set-Cookie', `linglo_s=; Path=/; HttpOnly; SameSite=Lax${secure}; Max-Age=0`);
   res.redirect('/login');
-});
-
-// ── TOTP setup (one-time scan page, password protected) ──
-app.get('/totp-setup', async (req, res) => {
-  // Require full password auth (TOTP not required — this is the setup page)
-  // But add a no-store header so the secret isn't cached by browser or Cloudflare
-  if (!isAuthed(req.headers.cookie)) return res.redirect('/login');
-  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
-  res.setHeader('Pragma', 'no-cache');
-  const uri = `otpauth://totp/LingLo:lowie?secret=${TOTP_SECRET}&issuer=LingLo&algorithm=SHA1&digits=6&period=30`;
-  const qr = await qrcode.toDataURL(uri);
-  res.send(`<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>LingLo — TOTP Setup</title>
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body { min-height: 100vh; display: flex; align-items: center; justify-content: center;
-      background: #0f0e17; font-family: system-ui, sans-serif; color: #e8e4f0; }
-    .card { background: #1a1828; border: 1px solid #2a2840; border-radius: 16px;
-      padding: 36px; width: min(400px, 94vw); text-align: center; }
-    h1 { font-size: 1.2rem; margin-bottom: 8px; }
-    p { font-size: 0.85rem; color: #7c7a8e; margin-bottom: 20px; line-height: 1.5; }
-    img { border-radius: 8px; width: 220px; height: 220px; }
-    .secret { margin-top: 16px; font-family: monospace; font-size: 0.85rem;
-      background: #0f0e17; border: 1px solid #2a2840; border-radius: 8px;
-      padding: 10px 14px; letter-spacing: 2px; color: #a78bfa; word-break: break-all; }
-    .note { margin-top: 16px; font-size: 0.78rem; color: #4a4860; }
-    a { display: inline-block; margin-top: 20px; color: #a78bfa; font-size: 0.85rem; }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <h1>Scan this QR code</h1>
-    <p>Open Google Authenticator, Authy, or any TOTP app and scan the code below.</p>
-    <img src="${qr}" alt="QR code">
-    <div class="secret">${TOTP_SECRET}</div>
-    <div class="note">Manual entry: use the key above with SHA1, 6 digits, 30s interval.</div>
-    <a href="/">← Back to library</a>
-  </div>
-</body>
-</html>`);
-});
-
-// ── TOTP verification for terminal ──
-app.get('/terminal-auth', (req, res) => {
-  if (!isAuthed(req.headers.cookie)) return res.redirect('/login');
-  const err = req.url.includes('?err') ? '<p class="err">Invalid code. Try again.</p>' : '';
-  res.send(`<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>LingLo — Verify</title>
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body { min-height: 100vh; display: flex; align-items: center; justify-content: center;
-      background: #0f0e17; font-family: system-ui, sans-serif; color: #e8e4f0; }
-    .card { background: #1a1828; border: 1px solid #2a2840; border-radius: 16px;
-      padding: 40px 36px; width: min(340px, 92vw); }
-    .logo { font-size: 1.4rem; font-weight: 700; margin-bottom: 4px; }
-    .sub { font-size: 0.85rem; color: #7c7a8e; margin-bottom: 28px; }
-    label { font-size: 0.8rem; color: #7c7a8e; display: block; margin-bottom: 6px; }
-    input[type=text] { width: 100%; background: #0f0e17; border: 1px solid #2a2840;
-      border-radius: 8px; padding: 10px 14px; color: #e8e4f0; font-size: 1.4rem;
-      letter-spacing: 6px; text-align: center; outline: none; font-family: monospace;
-      transition: border-color 0.15s; }
-    input[type=text]:focus { border-color: #a78bfa; }
-    button { margin-top: 16px; width: 100%; background: #a78bfa; color: #fff;
-      border: none; border-radius: 8px; padding: 11px; font-size: 0.95rem;
-      font-weight: 600; cursor: pointer; transition: background 0.15s; }
-    button:hover { background: #9061f9; }
-    .err { margin-top: 12px; font-size: 0.82rem; color: #f87171; }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <div class="logo">Claude Code</div>
-    <div class="sub">Enter your authenticator code</div>
-    <form method="POST" action="/terminal-auth">
-      <label for="code">6-digit code</label>
-      <input type="text" id="code" name="code" maxlength="6" autocomplete="one-time-code"
-             inputmode="numeric" pattern="[0-9]{6}" autofocus>
-      <button type="submit">Verify</button>
-      ${err}
-    </form>
-  </div>
-</body>
-</html>`);
-});
-
-app.post('/terminal-auth', (req, res) => {
-  if (!isAuthed(req.headers.cookie)) return res.redirect('/login');
-  const ip = req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket.remoteAddress;
-  if (isRateLimited(totpAttempts, ip, TOTP_MAX))
-    return res.status(429).send('Too many attempts. Try again in 15 minutes.');
-  const code = (req.body.code || '').trim();
-  // Reject replayed codes
-  if (usedTotpCodes.has(code)) return res.redirect('/terminal-auth?err=1');
-  const isValid = verifyTOTP(code, TOTP_SECRET);
-  if (isValid) {
-    usedTotpCodes.set(code, Date.now() + 90 * 1000); // mark used for 90s (covers ±1 window)
-    totpVerified.set(getToken(req.headers.cookie), Date.now() + TOTP_SESSION_TTL);
-    res.redirect('/terminal.html');
-  } else {
-    res.redirect('/terminal-auth?err=1');
-  }
 });
 
 // ── Auth wall — everything below requires login ──
@@ -491,26 +433,101 @@ app.get('/api/books/:id/chapter/:index', async (req, res) => {
   }
 });
 
+app.get('/api/books/:id/search', async (req, res) => {
+  try {
+    const q = (req.query.q || '').trim().toLowerCase();
+    if (!q || q.length < 2) return res.json([]);
+
+    const book = db.prepare('SELECT * FROM books WHERE id = ?').get(req.params.id);
+    if (!book) return res.status(404).json({ error: 'Book not found' });
+    const epub = await getEpub(book.filepath);
+    const chapters = epub.toc.filter(ch => ch.id);
+
+    const results = [];
+    for (let i = 0; i < chapters.length; i++) {
+      const chapter = chapters[i];
+      let html;
+      try {
+        html = await epub.getChapterRawAsync(chapter.id);
+      } catch {
+        html = await epub.getChapterAsync(chapter.id);
+      }
+
+      // Convert HTML to raw text safely for searching
+      const rawText = cleanHtml(html).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+      const textLower = rawText.toLowerCase();
+
+      let matchIdx = textLower.indexOf(q);
+      while (matchIdx !== -1) {
+        // Extract ~40 chars of context around the match
+        const start = Math.max(0, matchIdx - 40);
+        const end = Math.min(rawText.length, matchIdx + q.length + 40);
+
+        let snippet = rawText.substring(start, end).trim();
+        if (start > 0) snippet = '...' + snippet;
+        if (end < rawText.length) snippet = snippet + '...';
+
+        results.push({
+          chapterIndex: i,
+          chapterTitle: chapter.title || `Chapter ${i + 1}`,
+          snippet,
+          match: rawText.substring(matchIdx, matchIdx + q.length)
+        });
+
+        matchIdx = textLower.indexOf(q, matchIdx + 1);
+        if (results.length > 500) break; // hard limit to prevent crazy big responses
+      }
+      if (results.length > 500) break;
+    }
+
+    res.json(results);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post('/api/translate', async (req, res) => {
-  const { text, sentence } = req.body;
+  const { text, sentence, type } = req.body;
   if (!text?.trim()) return res.status(400).json({ error: 'No text provided' });
   try {
-    const context = sentence && sentence !== text
-      ? ` Use this sentence as context to pick the right meaning: "${sentence}"`
-      : '';
-    const r = await fetch('http://localhost:11434/api/generate', {
+    let prompt;
+    if (type === 'context-combined') {
+      // Single call: translate full sentence AND mark the target word with [HL]...[/HL]
+      prompt = `You are an expert literary translator. Translate the following Spanish sentence into natural, fluent English that sounds like a native speaker wrote it. The Spanish word or phrase "${text}" is the focus word.
+
+Rules:
+1. Provide a highly natural, context-aware English translation of the ENTIRE sentence. Do not be overly literal if it sounds clunky.
+2. Identify the exact English words that correspond to the focus word "${text}".
+3. Wrap ONLY that translated English focus word/phrase with [HL] and [/HL] markers.
+4. Reply ONLY with the final English sentence, nothing else. No notes, no explanations.
+
+Example:
+Sentence: "El hombre tenía una plaza en el colegio" | Focus: "una plaza"
+Reply: The man had [HL]a spot[/HL] at the school.
+
+Sentence: "${sentence}"`;
+    } else if (type === 'context-sentence') {
+      prompt = `Translate the following Spanish sentence to English. Reply ONLY with the translated English sentence, nothing else. Sentence: "${text}"`;
+    } else {
+      prompt = (sentence && sentence !== text)
+        ? `Translate the Spanish word or phrase "${text.trim()}" in the context of this sentence: "${sentence}". Reply with ONLY the English translation of "${text.trim()}", nothing else.`
+        : `Translate the Spanish word or phrase "${text.trim()}" to English. Reply with ONLY the English translation, nothing else.`;
+    }
+
+    const r = await fetch('http://localhost:11435/api/generate', {
+      headers: { 'X-Source': 'linglo' },
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'llama3.2:3b',
-        prompt: `Translate only the Spanish word or phrase "${text.trim()}" to English.${context} Reply with only the English translation of "${text.trim()}", nothing else.`,
+        model: 'qwen2.5-coder:7b',
+        prompt: prompt,
         stream: true
       })
     });
 
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
     res.setHeader('Transfer-Encoding', 'chunked');
-    res.setHeader('X-Model', 'llama3.2:3b');
+    res.setHeader('X-Model', 'qwen2.5-coder:7b');
 
     const reader = r.body.getReader();
     const decoder = new TextDecoder();
@@ -523,7 +540,7 @@ app.post('/api/translate', async (req, res) => {
           const json = JSON.parse(line);
           if (json.response) res.write(json.response);
           if (json.done) { res.end(); return; }
-        } catch {}
+        } catch { }
       }
     }
     res.end();
@@ -535,11 +552,12 @@ app.post('/api/translate', async (req, res) => {
 app.post('/api/explain', async (req, res) => {
   const { word, sentence } = req.body;
   try {
-    const r = await fetch('http://localhost:11434/api/generate', {
+    const r = await fetch('http://localhost:11435/api/generate', {
+      headers: { 'X-Source': 'linglo' },
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'llama3.2:3b',
+        model: 'qwen2.5-coder:7b',
         prompt: `You are a concise Spanish language tutor. Always respond in English. The learner clicked on "${word}" in:\n"${sentence}"\n\nGive 3 short lines:\n1. Meaning in this context\n2. Grammar note (tense/conjugation if relevant)\n3. Memory tip\n\nNo headers, just the 3 lines. Respond in English only.`,
         stream: true
       })
@@ -547,7 +565,7 @@ app.post('/api/explain', async (req, res) => {
 
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
     res.setHeader('Transfer-Encoding', 'chunked');
-    res.setHeader('X-Model', 'llama3.2:3b');
+    res.setHeader('X-Model', 'qwen2.5-coder:7b');
 
     const reader = r.body.getReader();
     const decoder = new TextDecoder();
@@ -560,7 +578,7 @@ app.post('/api/explain', async (req, res) => {
           const json = JSON.parse(line);
           if (json.response) res.write(json.response);
           if (json.done) { res.end(); return; }
-        } catch {}
+        } catch { }
       }
     }
     res.end();
@@ -569,14 +587,28 @@ app.post('/api/explain', async (req, res) => {
   }
 });
 
+
+app.post('/api/rarity', (req, res) => {
+  const { words } = req.body;
+  if (!Array.isArray(words) || words.length === 0) return res.json({});
+  const child = spawn('/usr/bin/python3', [path.join(__dirname, 'wordfreq_lookup.py')]);
+  let out = '';
+  child.stdin.write(JSON.stringify(words));
+  child.stdin.end();
+  child.stdout.on('data', d => out += d.toString());
+  child.on('close', () => { try { res.json(JSON.parse(out)); } catch { res.json({}); } });
+  child.on('error', () => res.json({}));
+});
+
 app.post('/api/conjugate', async (req, res) => {
   const { word, sentence } = req.body;
   try {
-    const r = await fetch('http://localhost:11434/api/generate', {
+    const r = await fetch('http://localhost:11435/api/generate', {
+      headers: { 'X-Source': 'linglo' },
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'llama3.2:3b',
+        model: 'qwen2.5-coder:7b',
         prompt: `The Spanish word "${word}" appears in: "${sentence}". Is it a verb? If yes, reply in this exact format (3 lines, nothing else):\nInfinitive: [infinitive]\nPresent: yo [form], tú [form], él [form], nosotros [form], ellos [form]\nPreterite: yo [form]\nIf it is not a verb, reply with just: —`,
         stream: true
       })
@@ -590,7 +622,7 @@ app.post('/api/conjugate', async (req, res) => {
       if (done) break;
       for (const line of decoder.decode(value).split('\n')) {
         if (!line.trim()) continue;
-        try { const j = JSON.parse(line); if (j.response) res.write(j.response); if (j.done) { res.end(); return; } } catch {}
+        try { const j = JSON.parse(line); if (j.response) res.write(j.response); if (j.done) { res.end(); return; } } catch { }
       }
     }
     res.end();
@@ -600,11 +632,12 @@ app.post('/api/conjugate', async (req, res) => {
 app.post('/api/idiom', async (req, res) => {
   const { text, sentence } = req.body;
   try {
-    const r = await fetch('http://localhost:11434/api/generate', {
+    const r = await fetch('http://localhost:11435/api/generate', {
+      headers: { 'X-Source': 'linglo' },
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'llama3.2:3b',
+        model: 'qwen2.5-coder:7b',
         prompt: `Is the Spanish phrase "${text}" an idiomatic expression or fixed phrase? Context: "${sentence}". If yes, reply with one short sentence explaining what it means as an idiom. If no, reply with just: no`,
         stream: true
       })
@@ -618,7 +651,7 @@ app.post('/api/idiom', async (req, res) => {
       if (done) break;
       for (const line of decoder.decode(value).split('\n')) {
         if (!line.trim()) continue;
-        try { const j = JSON.parse(line); if (j.response) res.write(j.response); if (j.done) { res.end(); return; } } catch {}
+        try { const j = JSON.parse(line); if (j.response) res.write(j.response); if (j.done) { res.end(); return; } } catch { }
       }
     }
     res.end();
@@ -629,11 +662,12 @@ app.post('/api/summarize', async (req, res) => {
   const { text, title } = req.body;
   if (!text?.trim()) return res.status(400).end('No text');
   try {
-    const r = await fetch('http://localhost:11434/api/generate', {
+    const r = await fetch('http://localhost:11435/api/generate', {
+      headers: { 'X-Source': 'linglo' },
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'llama3.2:3b',
+        model: 'qwen2.5-coder:7b',
         prompt: `Summarize this chapter${title ? ` ("${title}")` : ''} in 3-4 sentences in English. Be concise, focus on what happens. Do not start with "This chapter".\n\n${text.slice(0, 4000)}`,
         stream: true
       })
@@ -647,7 +681,37 @@ app.post('/api/summarize', async (req, res) => {
       if (done) break;
       for (const line of decoder.decode(value).split('\n')) {
         if (!line.trim()) continue;
-        try { const j = JSON.parse(line); if (j.response) res.write(j.response); if (j.done) { res.end(); return; } } catch {}
+        try { const j = JSON.parse(line); if (j.response) res.write(j.response); if (j.done) { res.end(); return; } } catch { }
+      }
+    }
+    res.end();
+  } catch { res.status(503).end('Ollama not available'); }
+});
+
+app.post('/api/simplify', async (req, res) => {
+  const { sentence } = req.body;
+  if (!sentence?.trim()) return res.status(400).end('No sentence');
+  try {
+    const r = await fetch('http://localhost:11435/api/generate', {
+      headers: { 'X-Source': 'linglo' },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'qwen2.5-coder:7b',
+        prompt: `Rewrite the following Spanish sentence into "Simple Spanish" suitable for a beginner (A1/A2 level). Keep the original meaning but use simpler words and structures. Respond ONLY with the simplified Spanish sentence, nothing else.\n\nSentence: "${sentence}"`,
+        stream: true
+      })
+    });
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Transfer-Encoding', 'chunked');
+    const reader = r.body.getReader();
+    const decoder = new TextDecoder();
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      for (const line of decoder.decode(value).split('\n')) {
+        if (!line.trim()) continue;
+        try { const j = JSON.parse(line); if (j.response) res.write(j.response); if (j.done) { res.end(); return; } } catch { }
       }
     }
     res.end();
@@ -666,12 +730,34 @@ app.post('/api/words', (req, res) => {
   res.json({ id: result.lastInsertRowid });
 });
 
-app.get('/api/words', (req, res) => {
-  res.json(db.prepare(`
+function callWordfreq(words) {
+  return new Promise((resolve, reject) => {
+    const py = spawn('/usr/bin/python3', [path.join(__dirname, 'wordfreq_lookup.py')]);
+    let out = '';
+    py.stdout.on('data', d => { out += d; });
+    py.on('close', code => {
+      if (code !== 0) return reject(new Error(`wordfreq exited ${code}`));
+      try { resolve(JSON.parse(out)); } catch (e) { reject(e); }
+    });
+    py.on('error', reject);
+    py.stdin.write(JSON.stringify(words));
+    py.stdin.end();
+  });
+}
+
+app.get('/api/words', async (req, res) => {
+  const words = db.prepare(`
     SELECT w.*, b.title as book_title
     FROM words w LEFT JOIN books b ON w.book_id = b.id
     ORDER BY w.created_at DESC
-  `).all());
+  `).all();
+  if (words.length > 0) {
+    try {
+      const freqs = await callWordfreq(words.map(w => w.word));
+      words.forEach(w => { w.frequency = freqs[w.word] ?? 0; });
+    } catch { }
+  }
+  res.json(words);
 });
 
 app.delete('/api/words/:id', (req, res) => {
@@ -680,9 +766,9 @@ app.delete('/api/words/:id', (req, res) => {
 });
 
 // TTS
-const PIPER_DIR   = path.join(__dirname, 'piper');
-const PIPER_PY    = path.join(PIPER_DIR, 'venv', 'bin', 'piper');
-const PIPER_BIN   = path.join(PIPER_DIR, process.platform === 'win32' ? 'piper.exe' : 'piper');
+const PIPER_DIR = path.join(__dirname, 'piper');
+const PIPER_PY = path.join(PIPER_DIR, 'venv', 'bin', 'piper');
+const PIPER_BIN = path.join(PIPER_DIR, process.platform === 'win32' ? 'piper.exe' : 'piper');
 const PIPER_MODEL = path.join(PIPER_DIR, 'es_ES-sharvard-medium.onnx');
 
 function getPiperCmd(wavPath) {
@@ -697,9 +783,9 @@ app.get('/api/tts', async (req, res) => {
   const text = req.query.text?.trim();
   if (!text) return res.status(400).end();
 
-  const id  = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const wav = path.join(os.tmpdir(), `linglo-${id}.wav`);
-  const cleanup = () => fs.unlink(wav, () => {});
+  const cleanup = () => fs.unlink(wav, () => { });
 
   try {
     const piperCmd = getPiperCmd(wav);
@@ -722,7 +808,7 @@ app.get('/api/tts', async (req, res) => {
         const p = spawn('afconvert', ['-f', 'WAVE', '-d', 'LEI16', aiff, wav]);
         p.on('close', c => c === 0 ? resolve() : reject());
       });
-      fs.unlink(aiff, () => {});
+      fs.unlink(aiff, () => { });
     } else {
       return res.status(503).end('TTS not configured — run setup-piper.sh');
     }
@@ -738,62 +824,6 @@ app.get('/api/tts', async (req, res) => {
   }
 });
 
-// ── HTTP server + WebSocket terminal ──
-const server = http.createServer(app);
-
-const NVM_BIN = '/Users/lowie/.nvm/versions/node/v24.14.0/bin';
-
-const wss = new WebSocketServer({
-  server,
-  path: '/terminal-ws',
-  verifyClient: ({ req }) => isTerminalAuthed(req.headers.cookie)
-});
-
-wss.on('connection', (ws) => {
-  const NODE_BIN = '/Users/lowie/.nvm/versions/node/v24.14.0/bin/node';
-  const CLAUDE_SCRIPT = '/Users/lowie/.nvm/versions/node/v24.14.0/lib/node_modules/@anthropic-ai/claude-code/cli.js';
-  let shell;
-  try {
-    shell = pty.spawn(NODE_BIN, [CLAUDE_SCRIPT], {
-      name: 'xterm-256color',
-      cols: 80,
-      rows: 24,
-      cwd: '/Users/lowie/LingLo',
-      env: {
-        ...process.env,
-        PATH: `${NVM_BIN}:${process.env.PATH || '/usr/bin:/bin'}`,
-        TERM: 'xterm-256color',
-        COLORTERM: 'truecolor',
-        CLAUDECODE: undefined,
-      }
-    });
-  } catch (err) {
-    ws.send(JSON.stringify({ type: 'data', data: `\r\nFailed to start Claude Code: ${err.message}\r\n` }));
-    ws.send(JSON.stringify({ type: 'exit' }));
-    ws.close();
-    return;
-  }
-
-  shell.onData(data => {
-    if (ws.readyState === ws.OPEN) ws.send(JSON.stringify({ type: 'data', data }));
-  });
-
-  shell.onExit(() => {
-    if (ws.readyState === ws.OPEN) ws.send(JSON.stringify({ type: 'exit' }));
-    ws.close();
-  });
-
-  ws.on('message', raw => {
-    try {
-      const { type, data, cols, rows } = JSON.parse(raw);
-      if (type === 'input') shell.write(data);
-      if (type === 'resize') shell.resize(Math.max(1, cols), Math.max(1, rows));
-    } catch {}
-  });
-
-  ws.on('close', () => { try { shell.kill(); } catch {} });
-});
-
 autoImport().then(() => {
-  server.listen(PORT, () => console.log(`LingLo → http://localhost:${PORT}`));
+  app.listen(PORT, () => console.log(`LingLo → http://localhost:${PORT}`));
 });

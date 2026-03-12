@@ -7,17 +7,95 @@
   <title>LingLo</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Lora:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=4.29">
+  <style>
+    .theme-picker {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border-strong);
+      border-radius: 8px;
+      padding: 3px;
+      flex-shrink: 0;
+    }
+    body.theme-light .theme-picker {
+      background: rgba(0,0,0,0.04);
+    }
+    body.theme-ereader .theme-picker {
+      background: #f0f0f0;
+      border-color: rgba(0,0,0,0.2);
+    }
+    .theme-btn {
+      background: transparent;
+      border: none;
+      border-radius: 5px;
+      padding: 4px 9px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-family: var(--font-ui);
+      transition: all 0.12s;
+      white-space: nowrap;
+    }
+    .theme-btn:hover { color: var(--text); }
+    .theme-btn.active {
+      background: var(--purple-dim);
+      color: #fff;
+    }
+    body.theme-ereader .theme-btn.active {
+      background: #222;
+      color: #fff;
+    }
+    .streak-widget {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      background: var(--surface);
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      margin-bottom: 28px;
+    }
+    body.theme-ereader .streak-widget { background: #f8f8f8; border-color: rgba(0,0,0,0.15); }
+    .streak-info { flex: 1; min-width: 0; }
+    .streak-top { display: flex; align-items: baseline; gap: 6px; margin-bottom: 4px; }
+    .streak-count { font-size: 1.4rem; font-weight: 700; color: var(--text); }
+    .streak-label { font-size: 0.82rem; color: var(--text-muted); }
+    .streak-goal-text { font-size: 0.78rem; color: var(--text-muted); }
+    /* Header streak circle */
+    .streak-circle-btn { background: none; border: none; padding: 0; cursor: default; display: flex; align-items: center; flex-shrink: 0; }
+    @media (max-width: 540px) {
+      .streak-widget { gap: 14px; padding: 14px 16px; margin-bottom: 20px; }
+      .streak-count { font-size: 1.2rem; }
+    }
+  </style>
 </head>
 <body>
+  <script>
+    (function() {
+      try {
+        var s = JSON.parse(localStorage.getItem('linglo_settings') || '{}');
+        var t = s.theme || 'dark';
+        if (t === 'light') document.body.classList.add('theme-light');
+        if (t === 'ereader') document.body.classList.add('theme-ereader');
+      } catch(e) {}
+    })();
+  </script>
   <header class="header">
     <div class="header-inner">
-      <span class="logo">LingLo <span id="version-badge" style="font-size:0.6rem;font-weight:400;color:rgba(167,139,250,0.45);letter-spacing:0.04em;vertical-align:middle;"></span></span>
+      <span class="logo">LingLo <span id="version-badge" class="version-badge"></span></span>
+      <div class="theme-picker" id="theme-picker">
+        <button class="theme-btn" data-theme="dark">Dark</button>
+        <button class="theme-btn" data-theme="light">Light</button>
+        <button class="theme-btn" data-theme="ereader">E-ink</button>
+      </div>
       <div class="header-actions">
+        <div class="streak-circle-btn" id="header-streak-circle" title="Daily reading goal"></div>
         <a href="/flashcards.html" class="btn btn-primary">
-          ✦ Flashcards <span class="badge" id="word-count"></span>
+          ✦ Word list <span class="badge" id="word-count"></span>
         </a>
-        <a href="/terminal-auth" target="_blank" class="btn btn-secondary" style="font-size:0.82rem;padding:6px 14px;">⌨ Claude Code</a>
       </div>
     </div>
   </header>
@@ -27,6 +105,8 @@
       <h1>Your Spanish Library</h1>
       <p>Click a book to start reading. Click any word to translate it.</p>
     </div>
+
+    <div class="streak-widget" id="streak-widget"></div>
 
     <div class="upload-area" id="upload-area">
       <div class="upload-icon">📚</div>
@@ -105,8 +185,79 @@
       document.getElementById('version-badge').textContent = d.version;
     });
 
+    // ── Theme picker ──
+    (function() {
+      var themes = ['dark', 'light', 'ereader'];
+      function getTheme() {
+        try { return JSON.parse(localStorage.getItem('linglo_settings') || '{}').theme || 'dark'; } catch(e) { return 'dark'; }
+      }
+      function setTheme(t) {
+        document.body.classList.remove('theme-light', 'theme-ereader');
+        if (t === 'light') document.body.classList.add('theme-light');
+        if (t === 'ereader') document.body.classList.add('theme-ereader');
+        try {
+          var s = JSON.parse(localStorage.getItem('linglo_settings') || '{}');
+          s.theme = t;
+          localStorage.setItem('linglo_settings', JSON.stringify(s));
+        } catch(e) {}
+        document.querySelectorAll('.theme-btn').forEach(function(btn) {
+          btn.classList.toggle('active', btn.dataset.theme === t);
+        });
+      }
+      // Init active state
+      setTheme(getTheme());
+      document.getElementById('theme-picker').addEventListener('click', function(e) {
+        var btn = e.target.closest('.theme-btn');
+        if (btn) setTheme(btn.dataset.theme);
+      });
+    })();
+
+    function streakCircleSVG(pct, streak, size) {
+      const r = size / 2 - 3;
+      const circ = +(2 * Math.PI * r).toFixed(2);
+      const offset = +(circ * (1 - Math.min(1, pct / 100))).toFixed(2);
+      const goalMet = pct >= 100;
+      const stroke = goalMet ? '#34d399' : '#a78bfa';
+      const label = streak > 0 ? String(streak) : '';
+      const fs = streak > 99 ? Math.round(size * 0.22) : Math.round(size * 0.28);
+      return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" style="display:block">
+        <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="2.5"/>
+        <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="${stroke}" stroke-width="2.5"
+          stroke-dasharray="${circ}" stroke-dashoffset="${offset}"
+          stroke-linecap="round" transform="rotate(-90 ${size/2} ${size/2})"/>
+        <text x="${size/2}" y="${size/2}" text-anchor="middle" dominant-baseline="central"
+          font-size="${fs}" font-weight="700" fill="${goalMet ? '#34d399' : 'currentColor'}" font-family="system-ui,sans-serif">${label}</text>
+      </svg>`;
+    }
+
+    function renderStreak() {
+      const today = new Date().toISOString().split('T')[0];
+      const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
+      const yStr = yesterday.toISOString().split('T')[0];
+      const last = localStorage.getItem('linglo-streak-last');
+      const streak = (last === today || last === yStr) ? parseInt(localStorage.getItem('linglo-streak-count') || '0') : 0;
+      const dailyWords = localStorage.getItem('linglo-daily-date') === today
+        ? parseInt(localStorage.getItem('linglo-daily-words') || '0') : 0;
+      const goal = 500;
+      const goalMet = dailyWords >= goal;
+      const pct = Math.min(100, Math.round(dailyWords / goal * 100));
+      const streakMsg = streak >= 30 ? 'Legendary! 🏆' : streak >= 14 ? 'Unstoppable! 🚀' : streak >= 7 ? 'On fire! 🎉' : streak >= 3 ? 'Keep it up!' : streak === 1 ? 'Good start!' : 'Read 500 words to start your streak';
+      document.getElementById('streak-widget').innerHTML = `
+        ${streakCircleSVG(pct, streak, 48)}
+        <div class="streak-info">
+          <div class="streak-top">
+            <span class="streak-count">${streak}</span>
+            <span class="streak-label">day streak &nbsp;·&nbsp; ${streakMsg}</span>
+          </div>
+          <div class="streak-goal-text">${goalMet ? '✓ Daily goal reached!' : `${dailyWords} / ${goal} words today`}</div>
+        </div>
+      `;
+      document.getElementById('header-streak-circle').innerHTML = streakCircleSVG(pct, streak, 30);
+    }
+
     loadBooks();
     loadWordCount();
+    renderStreak();
   </script>
 </body>
 </html>

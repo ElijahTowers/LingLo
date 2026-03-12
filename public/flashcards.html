@@ -10,16 +10,18 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --purple: #7c3aed;
-      --purple-dim: #a78bfa;
-      --green: #22c55e;
-      --red: #ef4444;
-      --bg: #0d0d1a;
-      --surface: #13131f;
-      --surface2: #1c1c2e;
+      --purple: #d4874a;
+      --purple-dim: #a85f2e;
+      --purple-glow: rgba(212,135,74,0.15);
+      --green: #6aaa7a;
+      --red: #e07070;
+      --bg: #1a1612;
+      --surface: #231e18;
+      --surface2: #2e2720;
       --border: rgba(255,255,255,0.07);
-      --text: #e8e6f0;
-      --text-muted: rgba(232,230,240,0.45);
+      --border-strong: rgba(255,255,255,0.11);
+      --text: #ede0cc;
+      --text-muted: rgba(237,224,204,0.42);
       --font-ui: 'Inter', -apple-system, sans-serif;
       --font-read: 'Lora', Georgia, serif;
     }
@@ -48,9 +50,10 @@
     .logo {
       font-size: 1.2rem;
       font-weight: 700;
-      color: var(--purple-dim);
+      color: var(--text);
       text-decoration: none;
       flex-shrink: 0;
+      font-family: var(--font-read);
     }
     .header-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
     .btn {
@@ -68,11 +71,11 @@
       white-space: nowrap;
     }
     .btn-ghost {
-      background: rgba(255,255,255,0.06);
-      color: rgba(255,255,255,0.7);
-      border: 1px solid rgba(255,255,255,0.09);
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--border-strong);
     }
-    .btn-ghost:hover { background: rgba(255,255,255,0.11); }
+    .btn-ghost:hover { background: var(--surface2); }
     .btn-danger {
       background: rgba(239,68,68,0.12);
       color: var(--red);
@@ -83,7 +86,8 @@
     /* ── View tabs ── */
     .view-tabs {
       display: flex;
-      background: rgba(255,255,255,0.05);
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border-strong);
       border-radius: 8px;
       padding: 3px;
       gap: 2px;
@@ -100,8 +104,8 @@
       transition: all 0.15s;
     }
     .view-tab.active {
-      background: rgba(124,58,237,0.4);
-      color: #c4b5fd;
+      background: var(--purple-dim);
+      color: #fff;
     }
 
     /* ── Tool bar ── */
@@ -114,32 +118,32 @@
       flex-wrap: wrap;
     }
     .deck-bar select {
-      background: rgba(255,255,255,0.07);
-      color: white;
-      border: 1px solid rgba(255,255,255,0.1);
+      background: var(--surface2);
+      color: var(--text);
+      border: 1px solid var(--border-strong);
       border-radius: 8px;
       padding: 6px 10px;
       font-size: 0.84rem;
       font-family: inherit;
       cursor: pointer;
     }
-    .deck-bar select option { background: #1e1040; }
+    .deck-bar select option { background: var(--surface2); }
     .deck-count { font-size: 0.84rem; color: var(--text-muted); }
     .search-input {
       flex: 1;
       min-width: 140px;
       max-width: 280px;
-      background: rgba(255,255,255,0.06);
-      border: 1px solid rgba(255,255,255,0.09);
+      background: var(--surface2);
+      border: 1px solid var(--border-strong);
       border-radius: 8px;
-      color: white;
+      color: var(--text);
       font-size: 0.84rem;
       font-family: inherit;
       padding: 6px 10px;
       outline: none;
     }
     .search-input::placeholder { color: var(--text-muted); }
-    .search-input:focus { border-color: rgba(124,58,237,0.4); }
+    .search-input:focus { border-color: var(--purple); }
 
     /* ── Flashcard view ── */
     .progress-area {
@@ -165,7 +169,7 @@
     }
     .progress-fill {
       height: 100%;
-      background: linear-gradient(90deg, #7c3aed, #a78bfa);
+      background: linear-gradient(90deg, var(--purple-dim), var(--purple));
       border-radius: 99px;
       transition: width 0.4s ease;
     }
@@ -234,14 +238,14 @@
       left: 0; right: 0;
       text-align: center;
       font-size: 0.76rem;
-      color: #c4b5fd;
+      color: #9ca3af;
       opacity: 0.7;
     }
 
     .card-back {
-      background: linear-gradient(145deg, #1e1040, #2d1b69);
+      background: linear-gradient(145deg, #2a1608, #4a2010);
       transform: rotateY(180deg);
-      border: 1px solid rgba(167,139,250,0.2);
+      border: 1px solid rgba(212,135,74,0.2);
       justify-content: center;
       position: relative;
     }
@@ -250,7 +254,7 @@
       font-weight: 600;
       letter-spacing: 0.1em;
       text-transform: uppercase;
-      color: #a78bfa;
+      color: var(--purple);
       margin-bottom: 12px;
     }
     .card-translation {
@@ -261,22 +265,36 @@
       margin-bottom: 18px;
       line-height: 1.2;
     }
-    .card-divider { height: 1px; background: rgba(167,139,250,0.2); margin-bottom: 16px; }
+    .card-divider { height: 1px; background: rgba(212,135,74,0.2); margin-bottom: 16px; }
     .card-sentence {
       font-size: 0.86rem;
-      color: rgba(255,255,255,0.6);
+      color: rgba(237,224,204,0.6);
       line-height: 1.7;
       font-style: italic;
     }
     .card-sentence .highlight {
-      color: #c4b5fd;
+      color: var(--purple);
       font-weight: 600;
       font-style: normal;
-      background: rgba(124,58,237,0.25);
+      background: rgba(212,135,74,0.2);
       border-radius: 3px;
       padding: 0 3px;
     }
     .card-chapter { margin-top: 10px; font-size: 0.7rem; color: rgba(255,255,255,0.3); }
+    .rarity {
+      display: inline-block;
+      font-size: 0.6rem;
+      font-weight: 700;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      padding: 2px 7px;
+      border-radius: 20px;
+      margin-top: 8px;
+    }
+    .rarity-common  { background: rgba(34,197,94,0.15);  color: #22c55e; border: 1px solid rgba(34,197,94,0.3); }
+    .rarity-moderate{ background: rgba(234,179,8,0.15);  color: #ca8a04; border: 1px solid rgba(234,179,8,0.3); }
+    .rarity-rare    { background: rgba(249,115,22,0.15); color: #ea580c; border: 1px solid rgba(249,115,22,0.3); }
+    .rarity-very-rare{ background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3); }
 
     .card-delete-btn {
       position: absolute;
@@ -327,11 +345,11 @@
     .btn-dont:hover { background: rgba(239,68,68,0.2); }
     .answer-btn:disabled { opacity: 0.3; cursor: default; }
 
-    .key-hints { font-size: 0.73rem; color: rgba(255,255,255,0.22); text-align: center; }
+    .key-hints { font-size: 0.73rem; color: var(--text-muted); text-align: center; }
     .key-hints kbd {
       display: inline-block;
-      background: rgba(255,255,255,0.06);
-      border: 1px solid rgba(255,255,255,0.09);
+      background: var(--surface2);
+      border: 1px solid var(--border-strong);
       border-radius: 4px;
       padding: 1px 5px;
       font-family: inherit;
@@ -386,7 +404,7 @@
       align-items: start;
       transition: border-color 0.15s;
     }
-    .word-item:hover { border-color: rgba(124,58,237,0.3); }
+    .word-item:hover { border-color: var(--purple-dim); }
     .word-item.deleting { opacity: 0.4; pointer-events: none; }
 
     .word-item-main { min-width: 0; }
@@ -406,7 +424,7 @@
     .wi-arrow { color: var(--text-muted); font-size: 0.9rem; }
     .wi-translation {
       font-size: 1rem;
-      color: #c4b5fd;
+      color: var(--purple);
       font-weight: 500;
     }
     .wi-sentence {
@@ -417,10 +435,10 @@
       margin-bottom: 8px;
     }
     .wi-sentence .highlight {
-      color: #c4b5fd;
+      color: var(--purple);
       font-style: normal;
       font-weight: 500;
-      background: rgba(124,58,237,0.18);
+      background: var(--purple-glow);
       border-radius: 3px;
       padding: 0 2px;
     }
@@ -428,7 +446,7 @@
       display: flex;
       gap: 14px;
       font-size: 0.73rem;
-      color: rgba(255,255,255,0.28);
+      color: var(--text-muted);
       flex-wrap: wrap;
     }
     .wi-meta-item { display: flex; align-items: center; gap: 4px; }
@@ -451,9 +469,9 @@
     .wi-delete:hover { background: rgba(239,68,68,0.22); color: var(--red); border-color: rgba(239,68,68,0.35); }
     .wi-actions { display: flex; gap: 6px; flex-shrink: 0; }
     .wi-speak {
-      background: rgba(124,58,237,0.09);
-      color: rgba(124,58,237,0.6);
-      border: 1px solid rgba(124,58,237,0.15);
+      background: var(--purple-glow);
+      color: var(--purple-dim);
+      border: 1px solid var(--border-strong);
       border-radius: 8px;
       width: 34px;
       height: 34px;
@@ -465,22 +483,22 @@
       transition: all 0.15s;
       flex-shrink: 0;
     }
-    .wi-speak:hover { background: rgba(124,58,237,0.2); color: var(--accent); border-color: rgba(124,58,237,0.35); }
+    .wi-speak:hover { background: rgba(212,135,74,0.25); color: var(--purple); border-color: var(--purple-dim); }
 
     .card-speak-btn {
       position: absolute;
       top: 12px;
       left: 12px;
-      background: rgba(124,58,237,0.12);
-      color: rgba(124,58,237,0.7);
-      border: 1px solid rgba(124,58,237,0.2);
+      background: rgba(212,135,74,0.12);
+      color: rgba(212,135,74,0.8);
+      border: 1px solid rgba(212,135,74,0.2);
       border-radius: 7px;
       padding: 5px 8px;
       font-size: 0.78rem;
       cursor: pointer;
       transition: all 0.15s;
     }
-    .card-speak-btn:hover { background: rgba(124,58,237,0.25); color: var(--accent); }
+    .card-speak-btn:hover { background: rgba(212,135,74,0.25); color: var(--purple); }
 
     .list-empty {
       text-align: center;
@@ -488,7 +506,77 @@
       color: var(--text-muted);
     }
     .list-empty .state-emoji { font-size: 2.5rem; margin-bottom: 12px; }
+
+
+    /* ── Light theme ── */
+    body.theme-light {
+      --purple: #8b4513; --purple-dim: #7c3d0f; --purple-glow: rgba(139,69,19,0.1);
+      --green: #2e7d52; --red: #c0392b;
+      --bg: #faf7f2; --surface: #f2ece2; --surface2: #e8dfd0;
+      --border: rgba(0,0,0,0.09); --border-strong: rgba(0,0,0,0.16);
+      --text: #1e1610; --text-muted: rgba(30,22,16,0.48);
+    }
+    body.theme-light header { background: var(--bg); }
+    body.theme-light .btn-ghost { background: transparent; color: var(--text); border-color: var(--border-strong); }
+    body.theme-light .btn-ghost:hover { background: var(--surface2); }
+    body.theme-light .view-tab.active { background: var(--purple-dim); color: #fff; }
+    body.theme-light .deck-bar select { background: var(--surface2); color: var(--text); border-color: var(--border-strong); }
+    body.theme-light .deck-bar select option { background: var(--surface2); }
+    body.theme-light .search-input { background: var(--surface2); color: var(--text); border-color: var(--border-strong); }
+    body.theme-light .progress-track { background: rgba(0,0,0,0.1); }
+    body.theme-light .card-back { background: linear-gradient(145deg, #3d1a08, #6b2e10); border-color: rgba(212,135,74,0.25); }
+    body.theme-light .card-sentence { color: rgba(237,224,204,0.7); }
+    body.theme-light .card-sentence .highlight { background: rgba(212,135,74,0.25); color: var(--purple); }
+
+    /* ── E-reader (e-ink) theme ── */
+    body.theme-ereader {
+      --purple: #000000; --purple-dim: #222222; --purple-glow: rgba(0,0,0,0.05);
+      --green: #000000; --red: #000000;
+      --bg: #ffffff; --surface: #ffffff; --surface2: #eeeeee;
+      --border: rgba(0,0,0,0.25); --text: #000000; --text-muted: #555555;
+    }
+    body.theme-ereader *, body.theme-ereader *::before, body.theme-ereader *::after {
+      transition: none !important; animation: none !important;
+    }
+    body.theme-ereader header { background: #ffffff; }
+    body.theme-ereader .btn-ghost { background: #f0f0f0; color: #222; border-color: rgba(0,0,0,0.25); }
+    body.theme-ereader .view-tab.active { background: rgba(0,0,0,0.15); color: #000; }
+    body.theme-ereader .deck-bar select { background: #fff; color: #000; border-color: rgba(0,0,0,0.3); }
+    body.theme-ereader .deck-bar select option { background: #fff; }
+    body.theme-ereader .search-input { background: #fff; color: #000; border-color: rgba(0,0,0,0.3); }
+    body.theme-ereader .progress-track { background: rgba(0,0,0,0.12); }
+    body.theme-ereader .progress-fill { background: #000; }
+    body.theme-ereader .card-back { background: #eeeeee; border-color: rgba(0,0,0,0.3); }
+    body.theme-ereader .card-back-label { color: #000; }
+    body.theme-ereader .card-translation { color: #000; }
+    body.theme-ereader .card-sentence { color: #444; }
+    body.theme-ereader .card-sentence .highlight { background: rgba(0,0,0,0.1); color: #000; font-style: normal; }
+    body.theme-ereader .card-hint { color: #555; }
+    body.theme-ereader .freq-dot { background: #ccc; }
+    body.theme-ereader .freq-dot.filled { background: #000; }
+    body.theme-ereader .card-speak-btn, body.theme-ereader .card-delete-btn { background: #f0f0f0; color: #333; border-color: rgba(0,0,0,0.2); }
+    body.theme-ereader .btn-know { background: rgba(0,0,0,0.05); color: #222; border-color: rgba(0,0,0,0.25); }
+    body.theme-ereader .btn-dont { background: rgba(0,0,0,0.05); color: #222; border-color: rgba(0,0,0,0.25); }
+    body.theme-ereader .word-item { border-color: rgba(0,0,0,0.2); }
+    body.theme-ereader .wi-translation { color: #222; }
+    body.theme-ereader .wi-sentence .highlight { background: rgba(0,0,0,0.1); color: #000; }
+    body.theme-ereader .wi-meta { color: rgba(0,0,0,0.4); }
+    body.theme-ereader .wi-freq-dot { background: #ccc; }
+    body.theme-ereader .wi-freq-dot.filled { background: #000; }
+    body.theme-ereader .wi-speak, body.theme-ereader .wi-delete { background: #f0f0f0; color: #333; border-color: rgba(0,0,0,0.2); }
+    body.theme-ereader .key-hints { color: rgba(0,0,0,0.3); }
+    body.theme-ereader .key-hints kbd { background: rgba(0,0,0,0.06); border-color: rgba(0,0,0,0.15); }
+    body.theme-ereader .card-sentence .highlight, body.theme-ereader .wi-sentence .highlight { background: rgba(0,0,0,0.1); color: #000; }
   </style>
+  <script>
+    (function() {
+      try {
+        var s = JSON.parse(localStorage.getItem('linglo_settings') || '{}');
+        if (s.theme === 'light') document.body.classList.add('theme-light');
+        if (s.theme === 'ereader') document.body.classList.add('theme-ereader');
+      } catch(e) {}
+    })();
+  </script>
 </head>
 <body>
   <canvas id="confetti-canvas"></canvas>
@@ -496,42 +584,59 @@
   <header>
     <a class="logo" href="/">LingLo</a>
     <div class="view-tabs">
-      <button class="view-tab active" id="tab-cards">Cards</button>
-      <button class="view-tab" id="tab-list">List</button>
+      <button class="view-tab" id="tab-cards">Cards</button>
+      <button class="view-tab active" id="tab-list">List</button>
     </div>
     <div class="header-right">
-      <button class="btn btn-ghost" id="shuffle-btn">⇄ Shuffle</button>
+      <button class="btn btn-ghost" id="shuffle-btn" style="display:none">⇄ Shuffle</button>
       <a href="/" class="btn btn-ghost">← Library</a>
     </div>
   </header>
 
   <div class="deck-bar">
     <select id="book-filter"><option value="">All books</option></select>
-    <input class="search-input" id="search-input" placeholder="Search words…" autocomplete="off" style="display:none">
+    <input class="search-input" id="search-input" placeholder="Search words…" autocomplete="off">
     <span class="deck-count" id="deck-count"></span>
   </div>
 
-  <div id="cards-view">
+  <div id="cards-view" style="display:none">
     <div id="app"></div>
   </div>
 
-  <div id="list-view" style="display:none">
+  <div id="list-view">
     <div class="word-list" id="word-list"></div>
   </div>
 
   <script>
     let allWords = [];
+    let rarityMap = {};
     let deck = [];
     let currentIdx = 0;
     let known = 0;
     let unknown = 0;
     let flipped = false;
-    let currentView = 'cards'; // 'cards' | 'list'
+    let currentView = 'list'; // 'cards' | 'list'
+
+    function rarityBadge(zipf) {
+      if (zipf === null || zipf === undefined) return '';
+      let label, cls;
+      if (zipf >= 5)      { label = 'Common';    cls = 'rarity-common'; }
+      else if (zipf >= 3) { label = 'Moderate';  cls = 'rarity-moderate'; }
+      else if (zipf >= 1) { label = 'Rare';      cls = 'rarity-rare'; }
+      else                { label = 'Very rare'; cls = 'rarity-very-rare'; }
+      return `<span class="rarity ${cls}">${label}</span>`;
+    }
 
     // ── Load words ──
     async function loadWords() {
       const res = await fetch('/api/words');
       allWords = await res.json();
+      // Batch-fetch rarity for all words
+      try {
+        const words = [...new Set(allWords.map(w => w.word))];
+        const r = await fetch('/api/rarity', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ words }) });
+        rarityMap = await r.json();
+      } catch { rarityMap = {}; }
       populateFilter();
       rebuildView();
     }
@@ -673,6 +778,7 @@
               <div class="card-face card-front">
                 <div class="card-front-label">Spanish</div>
                 <div class="card-word">${word.word}</div>
+                ${rarityBadge(rarityMap[word.word] ?? null)}
                 <button class="card-speak-btn" id="card-speak-btn" title="Pronounce">🔊</button>
                 <div class="card-source">${word.book_title || ''}</div>
                 <div class="card-hint">Click to reveal · Space</div>
@@ -776,6 +882,7 @@
             <div class="word-item-main">
               <div class="word-item-row1">
                 <span class="wi-word">${escHtml(w.word)}</span>
+                ${rarityBadge(rarityMap[w.word] ?? null)}
                 <span class="wi-arrow">→</span>
                 <span class="wi-translation">${escHtml(w.translation)}</span>
               </div>
@@ -896,7 +1003,7 @@
         y: -20,
         w: Math.random() * 10 + 6,
         h: Math.random() * 6 + 4,
-        color: ['#7c3aed','#a78bfa','#22c55e','#fbbf24','#f472b6','#60a5fa'][Math.floor(Math.random()*6)],
+        color: ['#d4874a','#a85f2e','#6aaa7a','#f0c060','#e07070','#60a5fa'][Math.floor(Math.random()*6)],
         vx: (Math.random() - 0.5) * 3,
         vy: Math.random() * 4 + 2,
         angle: Math.random() * 360,
