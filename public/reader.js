@@ -71,11 +71,7 @@ const MIN_PAGE_TIME = 30000; // 30 s on a page before its words count
 
 // ── Progress persistence ──
 function saveProgress() {
-  const textCol = document.getElementById('text-column');
-  if (!textCol) return;
-  const ratio = textCol.scrollHeight > textCol.clientHeight 
-    ? textCol.scrollTop / (textCol.scrollHeight - textCol.clientHeight) 
-    : 0;
+  const ratio = totalPages > 1 ? currentPage / (totalPages - 1) : 0;
   try {
     localStorage.setItem(`linglo-progress-${bookId}`, JSON.stringify({
       chapter: currentIndex,
@@ -1150,115 +1146,98 @@ document.getElementById('summarize-btn').addEventListener('click', async () => {
   btn.disabled = false;
 });
 
-// ── Pagination/Layout ──
+// ── Pagination ──
 function setupPagination(restoreRatio = 0, keepSummary = false) {
   const textCol = document.getElementById('text-column');
   const pages = document.getElementById('chapter-pages');
   if (!pages) return;
+  const W = textCol.clientWidth;
+  const summaryBar = document.getElementById('page-summary-bar');
+  const summaryBarH = summaryBar ? (summaryBar.offsetHeight || 54) : 54;
+  const H = textCol.clientHeight - summaryBarH;
+  if (W === 0 || H <= 0) return;
+  pageWidth = W;
 
-  // Force single-column scrollable layout
-  pages.style.height = 'auto';
-  pages.style.columnWidth = 'auto';
-  pages.style.columnCount = '1';
+  const readableWidth = 650;
+  const minPad = 16;
+  const hPad = W > readableWidth + 2 * minPad ? Math.round((W - readableWidth) / 2) : minPad;
+  document.getElementById('chapter-title').style.padding = `24px ${hPad}px 12px`;
+  document.getElementById('content').style.padding = `0 ${hPad}px 32px`;
+
+  pages.style.height = H + 'px';
+  pages.style.columnWidth = W + 'px';
   pages.style.columnGap = '0';
   pages.style.columnFill = 'auto';
-  pages.style.transform = 'none';
-  pages.style.display = 'block';
-
-  // Remove hardcoded padding that was set by JS
-  document.getElementById('chapter-title').style.padding = '';
-  document.getElementById('content').style.padding = '';
+  pages.style.transform = 'translateX(0)';
 
   requestAnimationFrame(() => {
-    const H = textCol.clientHeight || window.innerHeight;
-    const scrollH = textCol.scrollHeight;
-    
-    // Define "pages" as viewport-height chunks
-    totalPages = Math.max(1, Math.ceil(scrollH / H));
-    
-    // Scroll to restored ratio
-    const targetScroll = restoreRatio * (scrollH - H);
-    textCol.scrollTop = targetScroll;
-    
-    currentPage = Math.max(0, Math.floor(textCol.scrollTop / H));
-    
-    updateProgressBar();
-    updateNav();
-    
-    if (!keepSummary) {
-      document.getElementById('page-summary-text').textContent = '';
-      document.getElementById('summarize-btn').textContent = '✦ Summarize this page';
-      document.getElementById('summarize-btn').disabled = false;
-    }
+    totalPages = Math.max(1, Math.ceil(pages.scrollWidth / W));
+    const totalWordEls = document.querySelectorAll('#content .word').length;
+    wordsPerPage = totalPages > 0 ? Math.round(totalWordEls / totalPages) : 0;
+    const target = restoreRatio >= 1 ? totalPages - 1 : Math.round(restoreRatio * (totalPages - 1));
+    currentPage = -1;
+    goToPage(target, keepSummary);
   });
 }
 
-function updateProgressBar() {
-  const textCol = document.getElementById('text-column');
-  if (!textCol) return;
-  const H = textCol.clientHeight || 1;
-  const scrollH = textCol.scrollHeight;
-  const ratio = scrollH > H ? textCol.scrollTop / (scrollH - H) : 0;
-  
-  currentPage = Math.max(0, Math.floor(textCol.scrollTop / H));
-  document.getElementById('progress-bar').style.width = (Math.min(1, ratio) * 100) + '%';
+function goToPage(n, keepSummary = false) {
+  n = Math.max(0, Math.min(n, totalPages - 1));
+  // Log words for the page we're leaving, only if enough time was spent on it
+  const now = Date.now();
+  if (pageArrivalTime > 0 && wordsPerPage > 0 && !loggedPages.has(currentPage)
+      && (now - pageArrivalTime) >= MIN_PAGE_TIME) {
+    loggedPages.add(currentPage);
+    logWordsRead(wordsPerPage);
+  }
+  currentPage = n;
+  pageArrivalTime = now;
+  saveProgress();
+  const pages = document.getElementById('chapter-pages');
+  if (pages) pages.style.transform = `translateX(${-n * pageWidth}px)`;
+  const pct = totalPages > 1 ? n / (totalPages - 1) : 1;
+  document.getElementById('progress-bar').style.width = (pct * 100) + '%';
+  if (!keepSummary) {
+    document.getElementById('page-summary-text').textContent = '';
+    document.getElementById('summarize-btn').textContent = '✦ Summarize this page';
+    document.getElementById('summarize-btn').disabled = false;
+  }
   updateNav();
 }
-
-function goToPage(n) {
-  const textCol = document.getElementById('text-column');
-  if (!textCol) return;
-  const H = textCol.clientHeight;
-  const targetScroll = n * H;
-  textCol.scrollTo({ top: targetScroll, behavior: 'smooth' });
-}
-
-// Track scroll for progress bar and persistence
-document.getElementById('text-column').addEventListener('scroll', () => {
-  updateProgressBar();
-  saveProgress();
-}, { passive: true });
 
 let resizeTimer = null;
 const resizeObserver = new ResizeObserver(() => {
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(() => {
-    // Just ensure we keep our relative position during resize
-    const textCol = document.getElementById('text-column');
-    if (!textCol) return;
-    const ratio = textCol.scrollHeight > textCol.clientHeight 
-      ? textCol.scrollTop / (textCol.scrollHeight - textCol.clientHeight) 
-      : 0;
+    const ratio = totalPages > 1 ? currentPage / (totalPages - 1) : 0;
     setupPagination(ratio, true);
   }, 300);
 });
 resizeObserver.observe(document.getElementById('text-column'));
 
-// Re-layout when the summary bar grows/shrinks
+// Re-paginate when the summary bar grows/shrinks (e.g. summary text streaming in).
+// keepSummary=true prevents goToPage from clearing the summary text (no feedback loop).
 const summaryBarObserver = new ResizeObserver(() => {
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(() => {
-    const textCol = document.getElementById('text-column');
-    if (!textCol) return;
-    const ratio = textCol.scrollHeight > textCol.clientHeight 
-      ? textCol.scrollTop / (textCol.scrollHeight - textCol.clientHeight) 
-      : 0;
+    const ratio = totalPages > 1 ? currentPage / (totalPages - 1) : 0;
     setupPagination(ratio, true);
   }, 150);
 });
 summaryBarObserver.observe(document.getElementById('page-summary-bar'));
 
-// ── Click zones (left 15% = prev chapter, right 15% = next chapter) ──
+// ── Click zones (left 30% = prev, right 30% = next) ──
 document.getElementById('text-column').addEventListener('click', e => {
   if (e.target.closest('.word')) return;
   if (isDragging) return;
   const rect = document.getElementById('text-column').getBoundingClientRect();
   const relX = e.clientX - rect.left;
   const W = rect.width;
-  if (relX < W * 0.15) {
-    loadChapter(currentIndex - 1, true);
-  } else if (relX > W * 0.85) {
-    loadChapter(currentIndex + 1);
+  if (relX < W * 0.3) {
+    if (currentPage > 0) goToPage(currentPage - 1);
+    else loadChapter(currentIndex - 1, true);
+  } else if (relX > W * 0.7) {
+    if (currentPage < totalPages - 1) goToPage(currentPage + 1);
+    else loadChapter(currentIndex + 1);
   }
 });
 
