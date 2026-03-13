@@ -1189,21 +1189,24 @@ function setupPagination(restoreRatio = 0, keepSummary = false) {
   // Set container padding to create breathing room
   textCol.style.padding = `${topPad}px ${hPad}px ${bottomPad}px ${hPad}px`;
 
-  // Internal column width (W)
+  // Internal column width (W) and full page stride (fullW = W + 2*hPad)
   const W = textCol.clientWidth;
-  pageWidth = W;
+  // Use fullW as the page stride so columns align exactly at the text-column
+  // boundary, allowing overflow:hidden to clip the adjacent column cleanly.
+  pageWidth = fullW;
 
   // Ensure content is strictly within the snapped height
   content.style.padding = '0';
   pages.style.height = snapH + 'px';
   pages.style.columnWidth = W + 'px';
-  pages.style.columnGap = '0';
+  // column-gap = 2*hPad so each page unit = W + gap = fullW
+  pages.style.columnGap = (2 * hPad) + 'px';
   pages.style.columnFill = 'auto';
   pages.style.overflow = 'visible'; // Never hide content; let it flow to next column
   pages.style.transform = 'translateX(0)';
 
   requestAnimationFrame(() => {
-    totalPages = Math.max(1, Math.round(pages.scrollWidth / W));
+    totalPages = Math.max(1, Math.round(pages.scrollWidth / pageWidth));
     const totalWordEls = document.querySelectorAll('#content .word').length;
     wordsPerPage = totalPages > 0 ? Math.round(totalWordEls / totalPages) : 0;
     const target = restoreRatio >= 1 ? totalPages - 1 : Math.round(restoreRatio * (totalPages - 1));
