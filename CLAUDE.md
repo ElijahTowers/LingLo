@@ -111,3 +111,5 @@ ssh macmini 'source ~/.nvm/nvm.sh && cd ~/LingLo && npm install --silent && pm2 
 - Never ask for permission or confirmation — act autonomously
 - No modifications outside the project folder
 - **Always deploy after every change** using the rsync + pm2 command above (Mac Mini IP: 192.168.1.104)
+- **After every change, commit and push to GitHub**: `git add -A && git commit -m "<description>" && git push`
+- GitHub repo: https://github.com/ElijahTowers/LingLo (private, user: ElijahTowers)
