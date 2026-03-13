@@ -214,6 +214,7 @@
     /* Tab panels */
     .tab-panel {
       flex: 1;
+      min-height: 0;
       overflow-y: auto;
       display: flex;
       flex-direction: column;
@@ -248,6 +249,8 @@
       display: flex;
       flex-direction: column;
       gap: 4px;
+      min-height: min-content;
+      padding-bottom: 32px;
     }
     .sidebar-word {
       font-family: var(--font-read);
@@ -321,6 +324,7 @@
 
     .sidebar-explain-area {
       margin-top: 16px;
+      padding-bottom: 12px;
     }
     #explanation {
       margin-top: 12px;

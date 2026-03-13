@@ -1,6 +1,6 @@
 {
   "name": "linglo",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Spanish reading and vocabulary app",
   "main": "server.js",
   "scripts": {
