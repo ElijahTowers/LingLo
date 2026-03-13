@@ -249,7 +249,7 @@
       display: flex;
       flex-direction: column;
       gap: 4px;
-      min-height: min-content;
+      min-height: 100%;
       padding-bottom: 32px;
     }
     .sidebar-word {
@@ -324,8 +324,16 @@
 
     .sidebar-explain-area {
       margin-top: 16px;
+      min-height: 0;
       padding-bottom: 12px;
     }
+    .word-view.explaining .sidebar-explain-area {
+      flex: 1;
+      overflow-y: auto;
+      padding-right: 6px;
+    }
+    .word-view.explaining .sidebar-explain-area::-webkit-scrollbar { width: 4px; }
+    .word-view.explaining .sidebar-explain-area::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 2px; }
     #explanation {
       margin-top: 12px;
       font-size: 0.84rem;
@@ -927,6 +935,6 @@
       <button class="popup-btn primary" id="popup-more-btn">Details →</button>
     </div>
   </div>
-  <script src="reader.js?v=4.54"></script>
+  <script src="reader.js?v=4.55"></script>
 </body>
 </html>

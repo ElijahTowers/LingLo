@@ -538,6 +538,7 @@ function showWordView(word, sentence) {
   const expEl = document.getElementById('explanation');
   expEl.textContent = '';
   expEl.classList.remove('visible');
+  document.getElementById('word-view').classList.remove('explaining');
   document.getElementById('explain-btn').textContent = '✦ Explain';
   const modelEl = document.getElementById('explain-model');
   modelEl.textContent = '';
@@ -564,6 +565,7 @@ function showWordView(word, sentence) {
 function clearWordView() {
   document.getElementById('sidebar-empty').style.display = '';
   document.getElementById('word-view').style.display = 'none';
+  document.getElementById('word-view').classList.remove('explaining');
   document.getElementById('rarity-badge').innerHTML = '';
   document.getElementById('explanation').textContent = '';
   document.getElementById('explanation').classList.remove('visible');
@@ -642,6 +644,7 @@ document.getElementById('explain-btn').addEventListener('click', async () => {
   const btn = document.getElementById('explain-btn');
   btn.textContent = 'Asking AI…';
   btn.disabled = true;
+  document.getElementById('word-view').classList.add('explaining');
   expEl.classList.add('visible');
   expEl.textContent = '';
 
