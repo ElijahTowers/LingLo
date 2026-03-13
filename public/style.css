@@ -232,6 +232,7 @@ body.theme-light .badge { background: rgba(0,0,0,0.1); }
 }
 .book-cover {
   flex: 1;
+  position: relative;
   background: linear-gradient(160deg, #2a1608 0%, #3d200e 55%, #5c3218 100%);
   display: flex;
   flex-direction: column;
@@ -253,6 +254,25 @@ body.theme-light .badge { background: rgba(0,0,0,0.1); }
   color: rgba(220, 190, 150, 0.55);
   font-style: italic;
 }
+.book-progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 0 0 10px 10px;
+  overflow: hidden;
+}
+.book-progress-fill {
+  height: 100%;
+  background: var(--purple-dim);
+  border-radius: 0 0 10px 10px;
+  transition: width 0.3s ease;
+}
+body.theme-light .book-progress { background: rgba(0,0,0,0.08); }
+body.theme-ereader .book-progress { background: rgba(0,0,0,0.1); }
+body.theme-ereader .book-progress-fill { background: #000; }
 
 body.theme-light .book-spine { background: linear-gradient(to right, #3d2010, #6b3818); }
 body.theme-light .book-cover { background: linear-gradient(160deg, #f5ede0 0%, #e8d8c0 100%); border-color: rgba(120, 60, 15, 0.15); }

@@ -7,7 +7,7 @@
   <title>LingLo</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Lora:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=4.29">
+  <link rel="stylesheet" href="style.css?v=4.40">
   <style>
     .theme-picker {
       display: flex;
@@ -130,15 +130,27 @@
         grid.innerHTML = '<p class="empty-msg">No books yet. Upload an EPUB above.</p>';
         return;
       }
-      grid.innerHTML = books.map(b => `
+      grid.innerHTML = books.map(b => {
+        let pct = 0;
+        try {
+          const p = JSON.parse(localStorage.getItem(`linglo-progress-${b.id}`));
+          if (p && typeof p.chapter === 'number' && p.total > 0) {
+            pct = Math.round(((p.chapter + (p.ratio || 0)) / p.total) * 100);
+          }
+        } catch {}
+        const progressBar = pct > 0
+          ? `<div class="book-progress"><div class="book-progress-fill" style="width:${pct}%"></div></div>`
+          : '';
+        return `
         <a class="book-card" href="/reader.html?book=${b.id}">
           <div class="book-spine"></div>
           <div class="book-cover">
             <div class="book-title">${b.title}</div>
             <div class="book-author">${b.author}</div>
+            ${progressBar}
           </div>
-        </a>
-      `).join('');
+        </a>`;
+      }).join('');
     }
 
     async function loadWordCount() {

@@ -66,13 +66,36 @@ let pageWidth = 0;
 let wordsPerPage = 0;
 let loggedPages = new Set();
 let paginationTimer = null;
+let pageArrivalTime = 0;
+const MIN_PAGE_TIME = 30000; // 30 s on a page before its words count
+
+// ── Progress persistence ──
+function saveProgress() {
+  const ratio = totalPages > 1 ? currentPage / (totalPages - 1) : 0;
+  try {
+    localStorage.setItem(`linglo-progress-${bookId}`, JSON.stringify({
+      chapter: currentIndex,
+      ratio,
+      total: chapters.length
+    }));
+  } catch {}
+}
+function loadProgress() {
+  try {
+    const p = JSON.parse(localStorage.getItem(`linglo-progress-${bookId}`));
+    if (p && typeof p.chapter === 'number') return p;
+  } catch {}
+  // fallback to legacy chapter-only key
+  const ch = parseInt(localStorage.getItem(`linglo-chapter-${bookId}`));
+  return isNaN(ch) ? { chapter: 0, ratio: 0 } : { chapter: ch, ratio: 0 };
+}
 
 // ── Init ──
 async function init() {
   renderReaderStreakCircle();
   await Promise.all([loadSavedWords(), loadChapters()]);
-  const saved = parseInt(localStorage.getItem(`linglo-chapter-${bookId}`)) || 0;
-  await loadChapter(saved);
+  const { chapter, ratio } = loadProgress();
+  await loadChapter(chapter, false, ratio);
 }
 
 async function loadSavedWords() {
@@ -91,7 +114,7 @@ async function loadChapters() {
   document.title = `LingLo — ${data.title}`;
 }
 
-async function loadChapter(index, goToLast = false) {
+async function loadChapter(index, goToLast = false, initRatio = 0) {
   if (index < 0 || index >= chapters.length) return;
   currentIndex = index;
   localStorage.setItem(`linglo-chapter-${bookId}`, index);
@@ -101,6 +124,7 @@ async function loadChapter(index, goToLast = false) {
   readSet.add(index);
   localStorage.setItem(`linglo-read-${bookId}`, JSON.stringify([...readSet]));
   loggedPages = new Set();
+  pageArrivalTime = 0;
 
   // Clear search state
   clearSearchHighlights();
@@ -122,7 +146,7 @@ async function loadChapter(index, goToLast = false) {
   wrapWords(content);
   markSavedWords(content);
   updateNav();
-  setupPagination(goToLast ? 1 : 0);
+  setupPagination(goToLast ? 1 : initRatio);
 }
 
 // ── Word wrapping ──
@@ -1158,11 +1182,16 @@ function setupPagination(restoreRatio = 0, keepSummary = false) {
 
 function goToPage(n, keepSummary = false) {
   n = Math.max(0, Math.min(n, totalPages - 1));
-  currentPage = n;
-  if (wordsPerPage > 0 && !loggedPages.has(n)) {
-    loggedPages.add(n);
+  // Log words for the page we're leaving, only if enough time was spent on it
+  const now = Date.now();
+  if (pageArrivalTime > 0 && wordsPerPage > 0 && !loggedPages.has(currentPage)
+      && (now - pageArrivalTime) >= MIN_PAGE_TIME) {
+    loggedPages.add(currentPage);
     logWordsRead(wordsPerPage);
   }
+  currentPage = n;
+  pageArrivalTime = now;
+  saveProgress();
   const pages = document.getElementById('chapter-pages');
   if (pages) pages.style.transform = `translateX(${-n * pageWidth}px)`;
   const pct = totalPages > 1 ? n / (totalPages - 1) : 1;
