@@ -140,21 +140,7 @@ async function loadChapter(index, goToLast = false, initRatio = 0) {
   if (data.error) { content.textContent = data.error; return; }
 
   currentChapterTitle = data.title;
-  
-  // Strip duplicate title from content if it exists as an H1/H2
-  let cleanHtml = data.html;
-  const tempDiv = document.createElement('div');
-  tempDiv.innerHTML = cleanHtml;
-  const firstHeader = tempDiv.querySelector('h1, h2, h3');
-  if (firstHeader && (
-      firstHeader.textContent.trim().toLowerCase() === data.title.toLowerCase() ||
-      data.title.toLowerCase().includes(firstHeader.textContent.trim().toLowerCase()) ||
-      firstHeader.textContent.trim().length < 3
-  )) {
-    firstHeader.remove();
-    cleanHtml = tempDiv.innerHTML;
-  }
-  content.innerHTML = cleanHtml;
+  content.innerHTML = data.html;
 
   wrapWords(content);
   markSavedWords(content);
@@ -1167,7 +1153,7 @@ function setupPagination(restoreRatio = 0, keepSummary = false) {
   const chapterTitleEl = document.getElementById('chapter-title');
   if (!pages || !content) return;
 
-  // Hide custom title header (it's usually duplicate)
+  // Hide custom title header via inline style as well
   if (chapterTitleEl) chapterTitleEl.style.display = 'none';
 
   // Reset measurements
@@ -1184,7 +1170,6 @@ function setupPagination(restoreRatio = 0, keepSummary = false) {
   const minPad = 16;
   const topPad = 24;
   const bottomPad = 32;
-  const safetyBuffer = 20; // Extra buffer to prevent paragraph margins from causing clipping
 
   // Symmetrical horizontal padding
   const hPad = fullW > (readableWidth + 2 * minPad) ? Math.round((fullW - readableWidth) / 2) : minPad;
@@ -1196,8 +1181,9 @@ function setupPagination(restoreRatio = 0, keepSummary = false) {
     lineHeight = (parseFloat(style.fontSize) || 18) * 1.6;
   }
 
-  // Calculate strict snapped height for columns with a safety buffer
-  const availableH = fullH - summaryBarH - topPad - bottomPad - safetyBuffer;
+  // Calculate strict snapped height for columns
+  // Use a slight safety margin (1px) and ensure it's a content box height
+  const availableH = fullH - summaryBarH - topPad - bottomPad - 1;
   const snapH = Math.floor(availableH / lineHeight) * lineHeight;
   
   // Set container padding to create breathing room
@@ -1207,13 +1193,13 @@ function setupPagination(restoreRatio = 0, keepSummary = false) {
   const W = textCol.clientWidth;
   pageWidth = W;
 
-  // Zero out internal paddings to ensure vertical alignment across columns
+  // Ensure content is strictly within the snapped height
   content.style.padding = '0';
   pages.style.height = snapH + 'px';
   pages.style.columnWidth = W + 'px';
   pages.style.columnGap = '0';
   pages.style.columnFill = 'auto';
-  pages.style.overflow = 'hidden';
+  pages.style.overflow = 'visible'; // Never hide content; let it flow to next column
   pages.style.transform = 'translateX(0)';
 
   requestAnimationFrame(() => {
