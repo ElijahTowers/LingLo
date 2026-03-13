@@ -1182,9 +1182,10 @@ function setupPagination(restoreRatio = 0, keepSummary = false) {
   }
 
   // Calculate strict snapped height for columns
-  // Reserve enough space so the last line never hides under the summary bar,
-  // even on short landscape screens (tablet / Fold inner).
-  const bottomSafe = bottomPad + summaryBarH + Math.ceil(lineHeight * 0.6);
+  // Reserve generous space so the last line never hides under the summary bar,
+  // even on short landscape screens (tablet / Fold inner). We keep at least
+  // ~2 lines of breathing room above the bar.
+  const bottomSafe = bottomPad + summaryBarH + Math.ceil(lineHeight * 2);
   const availableH = fullH - topPad - bottomSafe - 1;
   const snapH = Math.floor(availableH / lineHeight) * lineHeight;
   
