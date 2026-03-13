@@ -1156,24 +1156,34 @@ function setupPagination(restoreRatio = 0, keepSummary = false) {
   const pages = document.getElementById('chapter-pages');
   if (!pages) return;
 
-  // Clear column-based styles
+  // Force single-column scrollable layout
   pages.style.height = 'auto';
   pages.style.columnWidth = 'auto';
+  pages.style.columnCount = '1';
   pages.style.columnGap = '0';
   pages.style.columnFill = 'auto';
   pages.style.transform = 'none';
+  pages.style.display = 'block';
 
   // Remove hardcoded padding that was set by JS
   document.getElementById('chapter-title').style.padding = '';
   document.getElementById('content').style.padding = '';
 
   requestAnimationFrame(() => {
+    const H = textCol.clientHeight || window.innerHeight;
+    const scrollH = textCol.scrollHeight;
+    
+    // Define "pages" as viewport-height chunks
+    totalPages = Math.max(1, Math.ceil(scrollH / H));
+    
     // Scroll to restored ratio
-    const targetScroll = restoreRatio * (textCol.scrollHeight - textCol.clientHeight);
+    const targetScroll = restoreRatio * (scrollH - H);
     textCol.scrollTop = targetScroll;
     
-    // Update progress bar
+    currentPage = Math.max(0, Math.floor(textCol.scrollTop / H));
+    
     updateProgressBar();
+    updateNav();
     
     if (!keepSummary) {
       document.getElementById('page-summary-text').textContent = '';
@@ -1186,17 +1196,20 @@ function setupPagination(restoreRatio = 0, keepSummary = false) {
 function updateProgressBar() {
   const textCol = document.getElementById('text-column');
   if (!textCol) return;
-  const ratio = textCol.scrollHeight > textCol.clientHeight 
-    ? textCol.scrollTop / (textCol.scrollHeight - textCol.clientHeight) 
-    : 0;
+  const H = textCol.clientHeight || 1;
+  const scrollH = textCol.scrollHeight;
+  const ratio = scrollH > H ? textCol.scrollTop / (scrollH - H) : 0;
+  
+  currentPage = Math.max(0, Math.floor(textCol.scrollTop / H));
   document.getElementById('progress-bar').style.width = (Math.min(1, ratio) * 100) + '%';
+  updateNav();
 }
 
 function goToPage(n) {
-  // In scroll mode, n=0 means start, n=1 means end of chapter
   const textCol = document.getElementById('text-column');
   if (!textCol) return;
-  const targetScroll = n * (textCol.scrollHeight - textCol.clientHeight);
+  const H = textCol.clientHeight;
+  const targetScroll = n * H;
   textCol.scrollTo({ top: targetScroll, behavior: 'smooth' });
 }
 
