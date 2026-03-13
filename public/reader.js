@@ -251,8 +251,8 @@ async function activatePhrase(selected, startSpan) {
   currentSentence = getSentence(startSpan);
   currentTranslation = '';
 
-  if (isMobile()) {
-    // Mobile: show inline popup above the first selected word
+  if (usesInlineLookup()) {
+    // Mobile and tablet touch: show inline popup above the first selected word
     showPopup(text, startSpan);
     speak(text);
     const popupSentTrans = document.getElementById('popup-sentence-translation');
@@ -435,8 +435,8 @@ document.getElementById('content').addEventListener('click', async e => {
   currentSentence = getSentence(span);
   currentTranslation = '';
 
-  if (isMobile()) {
-    // Mobile: show inline popup, leave sidebar closed
+  if (usesInlineLookup()) {
+    // Mobile and tablet touch: show inline popup, leave sidebar closed
     showPopup(word, span);
     speak(word);
     try {
@@ -756,6 +756,12 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 
 // ── Sidebar toggle ──
 function isMobile() { return window.innerWidth < 640; }
+function usesInlineLookup() {
+  return isMobile() || (
+    window.matchMedia('(pointer: coarse)').matches &&
+    window.innerWidth <= 1024
+  );
+}
 
 fetch('/api/version').then(r => r.json()).then(d => {
   document.getElementById('version-badge').textContent = d.version;
