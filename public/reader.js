@@ -1150,28 +1150,54 @@ document.getElementById('summarize-btn').addEventListener('click', async () => {
 function setupPagination(restoreRatio = 0, keepSummary = false) {
   const textCol = document.getElementById('text-column');
   const pages = document.getElementById('chapter-pages');
-  if (!pages) return;
-  const W = textCol.clientWidth;
+  const content = document.getElementById('content');
+  if (!pages || !content) return;
+
+  // Reset textCol padding temporarily to get full width
+  textCol.style.paddingLeft = '0px';
+  textCol.style.paddingRight = '0px';
+
+  const fullW = textCol.clientWidth;
   const summaryBar = document.getElementById('page-summary-bar');
   const summaryBarH = summaryBar ? (summaryBar.offsetHeight || 54) : 54;
-  const H = textCol.clientHeight - summaryBarH;
-  if (W === 0 || H <= 0) return;
-  pageWidth = W;
+  let availableH = textCol.clientHeight - summaryBarH;
+  if (fullW === 0 || availableH <= 0) return;
 
+  // Horizontal spacing logic
   const readableWidth = 650;
   const minPad = 16;
-  const hPad = W > readableWidth + 2 * minPad ? Math.round((W - readableWidth) / 2) : minPad;
-  document.getElementById('chapter-title').style.padding = `24px ${hPad}px 12px`;
-  document.getElementById('content').style.padding = `0 ${hPad}px 32px`;
+  const hPad = fullW > (readableWidth + 2 * minPad) ? Math.round((fullW - readableWidth) / 2) : minPad;
 
-  pages.style.height = H + 'px';
+  // Move padding to textCol to create balanced margins around the "viewport"
+  textCol.style.paddingLeft = hPad + 'px';
+  textCol.style.paddingRight = hPad + 'px';
+
+  // Internal width is now perfectly centered
+  const W = textCol.clientWidth;
+  pageWidth = W;
+
+  // Vertical snapping logic to prevent clipping
+  const style = window.getComputedStyle(content);
+  const lineHeight = parseFloat(style.lineHeight) || 28;
+  const topPad = 24;
+  const bottomPad = 32;
+  const snapH = Math.floor((availableH - topPad - bottomPad) / lineHeight) * lineHeight;
+  const finalH = snapH + topPad + bottomPad;
+
+  // Reset internal paddings (hPad is now handled by textCol)
+  document.getElementById('chapter-title').style.padding = `24px 0 12px`;
+  document.getElementById('content').style.padding = `0 0 32px`;
+
+  pages.style.height = finalH + 'px';
   pages.style.columnWidth = W + 'px';
   pages.style.columnGap = '0';
   pages.style.columnFill = 'auto';
   pages.style.transform = 'translateX(0)';
 
   requestAnimationFrame(() => {
-    totalPages = Math.max(1, Math.ceil(pages.scrollWidth / W));
+    // We scroll pages using translateX(-n * pageWidth)
+    // The columns are each 'W' wide, with 0 gap.
+    totalPages = Math.max(1, Math.round(pages.scrollWidth / W));
     const totalWordEls = document.querySelectorAll('#content .word').length;
     wordsPerPage = totalPages > 0 ? Math.round(totalWordEls / totalPages) : 0;
     const target = restoreRatio >= 1 ? totalPages - 1 : Math.round(restoreRatio * (totalPages - 1));
@@ -1193,7 +1219,7 @@ function goToPage(n, keepSummary = false) {
   pageArrivalTime = now;
   saveProgress();
   const pages = document.getElementById('chapter-pages');
-  if (pages) pages.style.transform = `translateX(${-n * pageWidth}px)`;
+  if (pages) pages.style.transform = `translateX(${-Math.round(n * pageWidth)}px)`;
   const pct = totalPages > 1 ? n / (totalPages - 1) : 1;
   document.getElementById('progress-bar').style.width = (pct * 100) + '%';
   if (!keepSummary) {
