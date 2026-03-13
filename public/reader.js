@@ -140,8 +140,21 @@ async function loadChapter(index, goToLast = false, initRatio = 0) {
   if (data.error) { content.textContent = data.error; return; }
 
   currentChapterTitle = data.title;
-  // Custom header hidden to prevent duplication; title is usually in data.html
-  content.innerHTML = data.html;
+  
+  // Strip duplicate title from content if it exists as an H1/H2
+  let cleanHtml = data.html;
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = cleanHtml;
+  const firstHeader = tempDiv.querySelector('h1, h2, h3');
+  if (firstHeader && (
+      firstHeader.textContent.trim().toLowerCase() === data.title.toLowerCase() ||
+      data.title.toLowerCase().includes(firstHeader.textContent.trim().toLowerCase()) ||
+      firstHeader.textContent.trim().length < 3
+  )) {
+    firstHeader.remove();
+    cleanHtml = tempDiv.innerHTML;
+  }
+  content.innerHTML = cleanHtml;
 
   wrapWords(content);
   markSavedWords(content);
@@ -1171,6 +1184,7 @@ function setupPagination(restoreRatio = 0, keepSummary = false) {
   const minPad = 16;
   const topPad = 24;
   const bottomPad = 32;
+  const safetyBuffer = 20; // Extra buffer to prevent paragraph margins from causing clipping
 
   // Symmetrical horizontal padding
   const hPad = fullW > (readableWidth + 2 * minPad) ? Math.round((fullW - readableWidth) / 2) : minPad;
@@ -1182,8 +1196,8 @@ function setupPagination(restoreRatio = 0, keepSummary = false) {
     lineHeight = (parseFloat(style.fontSize) || 18) * 1.6;
   }
 
-  // Calculate strict snapped height for columns
-  const availableH = fullH - summaryBarH - topPad - bottomPad;
+  // Calculate strict snapped height for columns with a safety buffer
+  const availableH = fullH - summaryBarH - topPad - bottomPad - safetyBuffer;
   const snapH = Math.floor(availableH / lineHeight) * lineHeight;
   
   // Set container padding to create breathing room
@@ -1199,6 +1213,7 @@ function setupPagination(restoreRatio = 0, keepSummary = false) {
   pages.style.columnWidth = W + 'px';
   pages.style.columnGap = '0';
   pages.style.columnFill = 'auto';
+  pages.style.overflow = 'hidden';
   pages.style.transform = 'translateX(0)';
 
   requestAnimationFrame(() => {
