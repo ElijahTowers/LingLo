@@ -184,6 +184,14 @@ function cleanWord(w) {
   return w.replace(/^[¿¡«"'()\[\]\-–—]+|[.,:;!?»"'()\[\]\-–—…]+$/g, '');
 }
 
+function escapeHtml(text) {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
 function markSavedWords(container) {
   container.querySelectorAll('.word').forEach(span => {
     if (savedWords.has(cleanWord(span.textContent).toLowerCase())) {
@@ -577,18 +585,37 @@ function clearWordView() {
 function updateSaveBtn(word) {
   const btn = document.getElementById('save-btn');
   if (savedWords.has(word.toLowerCase())) {
-    btn.textContent = '✓ Saved';
+    btn.textContent = '✕ Remove';
     btn.className = 'saved';
+    btn.title = 'Remove from saved words';
   } else {
     btn.textContent = '💾 Save';
     btn.className = '';
+    btn.title = 'Save word';
   }
 }
 
-// ── Save word ──
+async function removeSavedWord(id, word) {
+  await fetch(`/api/words/${id}`, { method: 'DELETE' });
+  savedWords.delete(word.toLowerCase());
+  document.querySelectorAll('#content .word.saved').forEach(span => {
+    if (cleanWord(span.textContent).toLowerCase() === word.toLowerCase()) {
+      span.classList.remove('saved');
+    }
+  });
+  if (currentWord && currentWord.toLowerCase() === word.toLowerCase()) updateSaveBtn(currentWord);
+  updateWordsTabCount();
+}
+
+// ── Save / remove word ──
 document.getElementById('save-btn').addEventListener('click', async () => {
-  if (!currentWord || !currentTranslation) return;
-  if (savedWords.has(currentWord.toLowerCase())) return;
+  if (!currentWord) return;
+  const existing = savedWords.get(currentWord.toLowerCase());
+  if (existing) {
+    await removeSavedWord(existing.id, currentWord);
+    return;
+  }
+  if (!currentTranslation) return;
 
   const res = await fetch('/api/words', {
     method: 'POST',
@@ -703,7 +730,7 @@ async function loadWordsTab() {
         ${w.sentence ? `<div class="word-card-sentence">${w.sentence.slice(0, 100)}${w.sentence.length > 100 ? '…' : ''}</div>` : ''}
         ${w.chapter_title ? `<div class="word-card-chapter">${w.chapter_title}</div>` : ''}
       </div>
-      <button class="word-card-delete" data-id="${w.id}" title="Delete">✕</button>
+      <button class="word-card-delete" data-id="${w.id}" data-word="${escapeHtml(w.word)}" title="Delete">✕</button>
     </div>
   `).join('');
 
@@ -718,15 +745,10 @@ async function loadWordsTab() {
   list.querySelectorAll('.word-card-delete').forEach(btn => {
     btn.addEventListener('click', async () => {
       const id = parseInt(btn.dataset.id);
-      await fetch(`/api/words/${id}`, { method: 'DELETE' });
+      const word = btn.dataset.word;
+      if (!word) return;
+      await removeSavedWord(id, word);
       document.getElementById(`wc-${id}`)?.remove();
-      savedWords.forEach((v, k) => { if (v.id === id) savedWords.delete(k); });
-      document.querySelectorAll('#content .word.saved').forEach(s => {
-        if (cleanWord(s.textContent).toLowerCase() === (Object.entries(Object.fromEntries(savedWords)).find(([,v]) => v === id)?.[0] ?? '')) {
-          s.classList.remove('saved');
-        }
-      });
-      updateWordsTabCount();
       const remaining = list.querySelectorAll('.word-card').length;
       countEl.textContent = `${remaining} word${remaining !== 1 ? 's' : ''} saved`;
       if (remaining === 0) {
