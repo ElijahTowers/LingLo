@@ -140,7 +140,7 @@ async function loadChapter(index, goToLast = false, initRatio = 0) {
   if (data.error) { content.textContent = data.error; return; }
 
   currentChapterTitle = data.title;
-  document.getElementById('chapter-title').textContent = data.title;
+  // Custom header hidden to prevent duplication; title is usually in data.html
   content.innerHTML = data.html;
 
   wrapWords(content);
@@ -1151,52 +1151,57 @@ function setupPagination(restoreRatio = 0, keepSummary = false) {
   const textCol = document.getElementById('text-column');
   const pages = document.getElementById('chapter-pages');
   const content = document.getElementById('content');
+  const chapterTitleEl = document.getElementById('chapter-title');
   if (!pages || !content) return;
 
-  // Reset textCol padding temporarily to get full width
-  textCol.style.paddingLeft = '0px';
-  textCol.style.paddingRight = '0px';
+  // Hide custom title header (it's usually duplicate)
+  if (chapterTitleEl) chapterTitleEl.style.display = 'none';
 
+  // Reset measurements
+  textCol.style.padding = '0';
   const fullW = textCol.clientWidth;
+  const fullH = textCol.clientHeight;
   const summaryBar = document.getElementById('page-summary-bar');
   const summaryBarH = summaryBar ? (summaryBar.offsetHeight || 54) : 54;
-  let availableH = textCol.clientHeight - summaryBarH;
-  if (fullW === 0 || availableH <= 0) return;
+  
+  if (fullW === 0 || fullH <= 0) return;
 
-  // Horizontal spacing logic
+  // Layout constants
   const readableWidth = 650;
   const minPad = 16;
+  const topPad = 24;
+  const bottomPad = 32;
+
+  // Symmetrical horizontal padding
   const hPad = fullW > (readableWidth + 2 * minPad) ? Math.round((fullW - readableWidth) / 2) : minPad;
+  
+  // Robust line-height calculation
+  const style = window.getComputedStyle(content);
+  let lineHeight = parseFloat(style.lineHeight);
+  if (isNaN(lineHeight)) {
+    lineHeight = (parseFloat(style.fontSize) || 18) * 1.6;
+  }
 
-  // Move padding to textCol to create balanced margins around the "viewport"
-  textCol.style.paddingLeft = hPad + 'px';
-  textCol.style.paddingRight = hPad + 'px';
+  // Calculate strict snapped height for columns
+  const availableH = fullH - summaryBarH - topPad - bottomPad;
+  const snapH = Math.floor(availableH / lineHeight) * lineHeight;
+  
+  // Set container padding to create breathing room
+  textCol.style.padding = `${topPad}px ${hPad}px ${bottomPad}px ${hPad}px`;
 
-  // Internal width is now perfectly centered
+  // Internal column width (W)
   const W = textCol.clientWidth;
   pageWidth = W;
 
-  // Vertical snapping logic to prevent clipping
-  const style = window.getComputedStyle(content);
-  const lineHeight = parseFloat(style.lineHeight) || 28;
-  const topPad = 24;
-  const bottomPad = 32;
-  const snapH = Math.floor((availableH - topPad - bottomPad) / lineHeight) * lineHeight;
-  const finalH = snapH + topPad + bottomPad;
-
-  // Reset internal paddings (hPad is now handled by textCol)
-  document.getElementById('chapter-title').style.padding = `24px 0 12px`;
-  document.getElementById('content').style.padding = `0 0 32px`;
-
-  pages.style.height = finalH + 'px';
+  // Zero out internal paddings to ensure vertical alignment across columns
+  content.style.padding = '0';
+  pages.style.height = snapH + 'px';
   pages.style.columnWidth = W + 'px';
   pages.style.columnGap = '0';
   pages.style.columnFill = 'auto';
   pages.style.transform = 'translateX(0)';
 
   requestAnimationFrame(() => {
-    // We scroll pages using translateX(-n * pageWidth)
-    // The columns are each 'W' wide, with 0 gap.
     totalPages = Math.max(1, Math.round(pages.scrollWidth / W));
     const totalWordEls = document.querySelectorAll('#content .word').length;
     wordsPerPage = totalPages > 0 ? Math.round(totalWordEls / totalPages) : 0;
