@@ -259,7 +259,16 @@
       color: var(--text);
       line-height: 1.2;
     }
+    .translate-label {
+      margin-top: 10px;
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
     .sidebar-translation {
+      margin-top: 6px;
       font-size: 1.1rem;
       color: var(--purple);
       font-weight: 500;
@@ -270,6 +279,30 @@
       color: var(--text-muted);
       font-style: italic;
       font-weight: 400;
+    }
+    .alt-meanings {
+      display: none;
+      margin-top: 14px;
+    }
+    .alt-meanings.visible { display: block; }
+    .alt-meanings-list {
+      margin-top: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 0.9rem;
+      color: var(--text);
+      line-height: 1.5;
+    }
+    .alt-meaning-item {
+      padding-left: 12px;
+      position: relative;
+    }
+    .alt-meaning-item::before {
+      content: '•';
+      position: absolute;
+      left: 0;
+      color: var(--purple);
     }
 
     .sidebar-actions {
@@ -575,8 +608,15 @@
       display: none;
     }
     #sentence-translation.visible { display: block; }
-    #sentence-translation .hl { color: var(--purple); font-style: normal; font-weight: 600; }
-    #word-popup .popup-sentence-translation .hl { color: var(--purple); font-style: normal; font-weight: 600; }
+    #sentence-translation .hl,
+    #word-popup .popup-sentence-translation .hl {
+      color: var(--purple);
+      font-style: normal;
+      font-weight: 600;
+      background: var(--purple-glow);
+      padding: 0 4px;
+      border-radius: 4px;
+    }
 
     /* Conjugation */
     /* ── Rarity badge ── */
@@ -879,12 +919,17 @@
       <div class="tab-panel" id="panel-translate">
         <div class="sidebar-empty" id="sidebar-empty">
           <div class="sidebar-empty-icon">👆</div>
-          <p>Click any word to translate it.<br>Drag to select a phrase.</p>
+          <p>Click any word to translate it.<br>Drag to select and save a phrase.</p>
         </div>
         <div class="word-view" id="word-view" style="display:none">
           <div class="sidebar-word" id="sidebar-word"></div>
           <div id="rarity-badge"></div>
+          <div class="translate-label">Meaning Here</div>
           <div class="sidebar-translation" id="sidebar-translation"></div>
+          <div class="alt-meanings" id="alt-meanings-wrap">
+            <div class="translate-label">Other Common Meanings</div>
+            <div class="alt-meanings-list" id="alt-meanings"></div>
+          </div>
           <div id="idiom-note"></div>
           <div class="sidebar-actions">
             <button id="save-btn">💾 Save</button>
@@ -935,6 +980,6 @@
       <button class="popup-btn primary" id="popup-more-btn">Details →</button>
     </div>
   </div>
-  <script src="reader.js?v=4.61"></script>
+  <script src="reader.js?v=4.62"></script>
 </body>
 </html>

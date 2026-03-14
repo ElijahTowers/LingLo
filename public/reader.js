@@ -193,6 +193,14 @@ function cleanWord(w) {
   return w.replace(/^[¿¡«"'()\[\]\-–—]+|[.,:;!?»"'()\[\]\-–—…]+$/g, '');
 }
 
+function isPhrase(text) {
+  return /\s/.test(text.trim());
+}
+
+function normalizeMeaning(text) {
+  return text.toLowerCase().replace(/^[\s•\-–—,.;:!?]+|[\s•\-–—,.;:!?]+$/g, '');
+}
+
 function escapeHtml(text) {
   return text
     .replace(/&/g, '&amp;')
@@ -332,6 +340,7 @@ async function activatePhrase(selected, startSpan) {
         transEl.textContent += decoder.decode(value, { stream: true });
       }
       currentTranslation = transEl.textContent.trim();
+      loadAlternativeMeanings(text, currentSentence, currentTranslation);
     } catch {
       transEl.textContent = 'Translation failed';
       transEl.className = 'sidebar-translation';
@@ -507,6 +516,7 @@ document.getElementById('content').addEventListener('click', async e => {
         transEl.textContent += decoder.decode(value, { stream: true });
       }
       currentTranslation = transEl.textContent.trim();
+      loadAlternativeMeanings(word, currentSentence, currentTranslation);
     } catch {
       transEl.textContent = 'Translation failed';
       transEl.className = 'sidebar-translation';
@@ -537,6 +547,8 @@ function showWordView(word, sentence) {
   });
   document.getElementById('sidebar-translation').textContent = '';
   document.getElementById('sidebar-translation').className = 'sidebar-translation';
+  document.getElementById('alt-meanings').innerHTML = '';
+  document.getElementById('alt-meanings-wrap').classList.remove('visible');
 
   // Sentence with highlight
   const sentEl = document.getElementById('sidebar-sentence');
@@ -599,6 +611,8 @@ function clearWordView() {
   document.getElementById('idiom-note').classList.remove('visible');
   document.getElementById('sentence-translation').textContent = '';
   document.getElementById('sentence-translation').classList.remove('visible');
+  document.getElementById('alt-meanings').innerHTML = '';
+  document.getElementById('alt-meanings-wrap').classList.remove('visible');
   if (activeWordEl) { activeWordEl.classList.remove('active'); activeWordEl = null; }
   clearDragSel();
   currentWord = '';
@@ -607,15 +621,44 @@ function clearWordView() {
 
 function updateSaveBtn(word) {
   const btn = document.getElementById('save-btn');
+  const itemLabel = isPhrase(word) ? 'phrase' : 'word';
   if (savedWords.has(word.toLowerCase())) {
-    btn.textContent = '✕ Remove';
+    btn.textContent = `✕ Remove ${itemLabel}`;
     btn.className = 'saved';
-    btn.title = 'Remove from saved words';
+    btn.title = `Remove ${itemLabel} from saved items`;
   } else {
-    btn.textContent = '💾 Save';
+    btn.textContent = `💾 Save ${itemLabel}`;
     btn.className = '';
-    btn.title = 'Save word';
+    btn.title = `Save ${itemLabel}`;
   }
+}
+
+async function loadAlternativeMeanings(text, sentence, primaryMeaning) {
+  const wrap = document.getElementById('alt-meanings-wrap');
+  const list = document.getElementById('alt-meanings');
+  wrap.classList.remove('visible');
+  list.innerHTML = '';
+  try {
+    const res = await fetch('/api/meanings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, sentence, primaryMeaning })
+    });
+    if (!res.ok) throw new Error();
+    const raw = (await res.text()).trim();
+    if (!raw) return;
+    const primaryNorm = normalizeMeaning(primaryMeaning || '');
+    const meanings = raw
+      .split('\n')
+      .map(line => line.replace(/^\d+[\).\s-]+/, '').trim())
+      .filter(Boolean)
+      .filter(line => normalizeMeaning(line) !== 'none')
+      .filter(line => normalizeMeaning(line) !== primaryNorm)
+      .slice(0, 3);
+    if (!meanings.length) return;
+    list.innerHTML = meanings.map(line => `<div class="alt-meaning-item">${escapeHtml(line)}</div>`).join('');
+    wrap.classList.add('visible');
+  } catch {}
 }
 
 async function removeSavedWord(id, word) {
@@ -888,6 +931,7 @@ document.getElementById('popup-more-btn').addEventListener('click', (e) => {
     transEl.textContent = currentTranslation;
     transEl.className = 'sidebar-translation';
     updateSaveBtn(currentWord);
+    loadAlternativeMeanings(currentWord, currentSentence, currentTranslation);
   }
 
   // Copy sentence translation from popup if already loaded, else trigger it

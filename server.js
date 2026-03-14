@@ -564,6 +564,54 @@ Reply:`;
   }
 });
 
+app.post('/api/meanings', async (req, res) => {
+  const { text, sentence, primaryMeaning } = req.body;
+  if (!text?.trim()) return res.status(400).json({ error: 'No text provided' });
+  try {
+    const r = await fetch('http://localhost:11435/api/generate', {
+      headers: { 'X-Source': 'linglo' },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'qwen2.5-coder:7b',
+        prompt: `You are a concise Spanish dictionary assistant. The user clicked the Spanish word or phrase "${text}"${sentence ? ` in the sentence "${sentence}"` : ''}. The main in-context translation is "${primaryMeaning || ''}".
+
+Give up to 3 short alternative English meanings or translations that this Spanish word or phrase can also have.
+
+Rules:
+- One meaning per line
+- No numbering
+- No quotes
+- No explanations
+- Avoid repeating the exact main in-context translation if possible
+- If there are no good alternatives, reply with: none`,
+        stream: true
+      })
+    });
+
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Transfer-Encoding', 'chunked');
+
+    const reader = r.body.getReader();
+    const decoder = new TextDecoder();
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      for (const line of decoder.decode(value).split('\n')) {
+        if (!line.trim()) continue;
+        try {
+          const json = JSON.parse(line);
+          if (json.response) res.write(json.response);
+          if (json.done) { res.end(); return; }
+        } catch { }
+      }
+    }
+    res.end();
+  } catch {
+    res.status(503).end('Ollama not available');
+  }
+});
+
 app.post('/api/explain', async (req, res) => {
   const { word, sentence } = req.body;
   try {
