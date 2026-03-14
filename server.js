@@ -1,5 +1,5 @@
 require('dotenv').config();
-const APP_VERSION = 'v4.62';
+const APP_VERSION = 'v4.63';
 const express = require('express');
 const crypto = require('crypto');
 const multer = require('multer');
@@ -510,7 +510,11 @@ app.post('/api/translate', async (req, res) => {
       // Single call: translate full sentence AND mark the target word/phrase with [HL]...[/HL]
       prompt = `You are an expert literary translator. Translate this Spanish sentence into natural English. The focus is the word or phrase in quotes below.
 
-CRITICAL: Your reply MUST be exactly one English sentence with the part that translates the focus wrapped in [HL] and [/HL]. Example: [HL]this part[/HL]. No other text.
+CRITICAL: Your reply MUST be exactly one English sentence with ONLY the smallest exact English equivalent of the focus wrapped in [HL] and [/HL]. Example: [HL]this part[/HL]. No other text.
+
+Do NOT highlight surrounding helper verbs, determiners, or adjectives unless they are part of the direct translation of the focus itself.
+If the focus is a noun, highlight only the noun phrase that translates that noun.
+If the focus is a phrase or verbal expression, highlight only the exact English words for that phrase, not extra surrounding context.
 
 Examples:
 Focus "una plaza" | Sentence: "El hombre tenía una plaza en el colegio."
@@ -518,6 +522,12 @@ Reply: The man had [HL]a spot[/HL] at the school.
 
 Focus "Se convertirá" | Sentence: "Se convertirá en el campeón."
 Reply: [HL]He will become[/HL] the champion.
+
+Focus "llamadas" | Sentence: "Hizo llamadas telefónicas importantes y volvió a gritar."
+Reply: He made important [HL]phone calls[/HL] and shouted again.
+
+Focus "se dio cuenta" | Sentence: "Al final se dio cuenta de la verdad."
+Reply: In the end [HL]he realized[/HL] the truth.
 
 Now translate. Focus "${text}" | Sentence: "${sentence}"
 Reply:`;
