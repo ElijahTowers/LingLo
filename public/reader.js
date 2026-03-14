@@ -90,6 +90,13 @@ function loadProgress() {
   return isNaN(ch) ? { chapter: 0, ratio: 0 } : { chapter: ch, ratio: 0 };
 }
 
+// Persist position when leaving the page (tab close, navigate away) so it's always remembered
+function onPageLeave() {
+  if (typeof currentIndex === 'number' && chapters && chapters.length > 0) saveProgress();
+}
+window.addEventListener('pagehide', onPageLeave);
+window.addEventListener('beforeunload', onPageLeave);
+
 // ── Init ──
 async function init() {
   renderReaderStreakCircle();
