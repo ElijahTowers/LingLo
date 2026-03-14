@@ -1,5 +1,5 @@
 require('dotenv').config();
-const APP_VERSION = 'v4.61';
+const APP_VERSION = 'v4.62';
 const express = require('express');
 const crypto = require('crypto');
 const multer = require('multer');
@@ -450,7 +450,11 @@ app.get('/api/books/:id/search', async (req, res) => {
       try {
         html = await epub.getChapterRawAsync(chapter.id);
       } catch {
-        html = await epub.getChapterAsync(chapter.id);
+        try {
+          html = await epub.getChapterAsync(chapter.id);
+        } catch {
+          continue;
+        }
       }
 
       // Convert HTML to raw text safely for searching
