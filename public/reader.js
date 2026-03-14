@@ -1049,6 +1049,28 @@ function clearSearchHighlights() {
   });
 }
 
+// Find all occurrences of query in current chapter (single word or phrase).
+// Returns array of "matches"; each match is an array of .word elements to highlight.
+function findSearchMatchesInChapter(query) {
+  const words = [...document.querySelectorAll('#content .word')];
+  const q = query.trim().toLowerCase();
+  const queryWords = q.split(/\s+/).filter(Boolean);
+  if (!queryWords.length) return [];
+  if (queryWords.length === 1) {
+    return words.filter(w => cleanWord(w.textContent).toLowerCase() === q).map(w => [w]);
+  }
+  const matches = [];
+  for (let i = 0; i <= words.length - queryWords.length; i++) {
+    const run = words
+      .slice(i, i + queryWords.length)
+      .map(w => cleanWord(w.textContent).toLowerCase())
+      .filter(Boolean)
+      .join(' ');
+    if (run === q) matches.push(words.slice(i, i + queryWords.length));
+  }
+  return matches;
+}
+
 function doSearch() {
   clearSearchHighlights();
   searchMatches = [];
@@ -1087,10 +1109,8 @@ function goToBookSearchResult(index) {
   const query = document.getElementById('search-input').value.trim().toLowerCase();
   const loadTarget = () => {
     const occurrenceInChapter = bookSearchResults.slice(0, index).filter(r => r.chapterIndex === result.chapterIndex).length;
-    searchMatches = [...document.querySelectorAll('#content .word')].filter(w =>
-      w.textContent.toLowerCase().includes(query)
-    );
-    searchMatches.forEach(w => w.classList.add('search-match'));
+    searchMatches = findSearchMatchesInChapter(query);
+    searchMatches.flat().forEach(w => w.classList.add('search-match'));
     goToSearchMatch(occurrenceInChapter);
     document.getElementById('search-count').textContent = `${index + 1} / ${bookSearchResults.length}`;
   };
@@ -1105,13 +1125,15 @@ function goToBookSearchResult(index) {
 
 function goToSearchMatch(index) {
   if (!searchMatches.length) return;
-  searchMatches.forEach(w => w.classList.remove('search-current'));
+  // searchMatches is array of arrays (each match = array of .word elements for phrase or single word)
+  searchMatches.flat().forEach(w => w.classList.remove('search-current'));
   searchCurrent = ((index % searchMatches.length) + searchMatches.length) % searchMatches.length;
-  const match = searchMatches[searchCurrent];
-  match.classList.add('search-current');
-  if (pageWidth > 0) {
+  const matchGroup = searchMatches[searchCurrent];
+  const firstEl = Array.isArray(matchGroup) ? matchGroup[0] : matchGroup;
+  matchGroup.forEach(w => w.classList.add('search-current'));
+  if (pageWidth > 0 && firstEl) {
     const textCol = document.getElementById('text-column');
-    const elLeft = match.getBoundingClientRect().left - textCol.getBoundingClientRect().left;
+    const elLeft = firstEl.getBoundingClientRect().left - textCol.getBoundingClientRect().left;
     const absLeft = elLeft + currentPage * pageWidth;
     const matchPage = Math.max(0, Math.floor(absLeft / pageWidth));
     if (matchPage !== currentPage) goToPage(matchPage);

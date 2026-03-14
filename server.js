@@ -1,5 +1,5 @@
 require('dotenv').config();
-const APP_VERSION = 'v4.60';
+const APP_VERSION = 'v4.61';
 const express = require('express');
 const crypto = require('crypto');
 const multer = require('multer');
@@ -454,10 +454,21 @@ app.get('/api/books/:id/search', async (req, res) => {
       }
 
       // Convert HTML to raw text safely for searching
-      const rawText = cleanHtml(html).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+      let rawText = cleanHtml(html)
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+/g, ' ');
+      // Decode HTML entities so "mis&nbsp;partes" matches "mis partes"
+      rawText = rawText
+        .replace(/&nbsp;|&#160;|&#x00A0;/gi, ' ')
+        .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(parseInt(n, 10)))
+        .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCharCode(parseInt(n, 16)))
+        .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+        .replace(/\s+/g, ' ');
+      rawText = rawText.normalize('NFC');
+      const qNorm = q.normalize('NFC');
       const textLower = rawText.toLowerCase();
 
-      let matchIdx = textLower.indexOf(q);
+      let matchIdx = textLower.indexOf(qNorm);
       while (matchIdx !== -1) {
         // Extract ~40 chars of context around the match
         const start = Math.max(0, matchIdx - 40);
@@ -474,7 +485,7 @@ app.get('/api/books/:id/search', async (req, res) => {
           match: rawText.substring(matchIdx, matchIdx + q.length)
         });
 
-        matchIdx = textLower.indexOf(q, matchIdx + 1);
+        matchIdx = textLower.indexOf(qNorm, matchIdx + 1);
         if (results.length > 500) break; // hard limit to prevent crazy big responses
       }
       if (results.length > 500) break;
