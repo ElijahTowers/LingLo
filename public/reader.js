@@ -259,7 +259,8 @@ async function activatePhrase(selected, startSpan) {
   currentSentence = getSentence(startSpan);
   currentTranslation = '';
 
-  if (usesInlineLookup()) {
+  // When sidebar is already open, always update it (don't use popup-only path)
+  if (!sidebarOpen && usesInlineLookup()) {
     // Mobile and tablet touch: show inline popup above the first selected word
     showPopup(text, startSpan);
     speak(text);
@@ -443,7 +444,8 @@ document.getElementById('content').addEventListener('click', async e => {
   currentSentence = getSentence(span);
   currentTranslation = '';
 
-  if (usesInlineLookup()) {
+  // When sidebar is already open, always update it (don't use popup-only path)
+  if (!sidebarOpen && usesInlineLookup()) {
     // Mobile and tablet touch: show inline popup, leave sidebar closed
     showPopup(word, span);
     speak(word);
