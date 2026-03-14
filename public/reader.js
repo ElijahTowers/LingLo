@@ -60,6 +60,8 @@ let currentSentence = '';
 let sidebarOpen = window.innerWidth >= 640;
 let searchMatches = [];
 let searchCurrent = -1;
+let bookSearchResults = [];   // full-book search from API: { chapterIndex, chapterTitle, snippet }
+let currentBookSearchIndex = -1;
 let currentPage = 0;
 let totalPages = 1;
 let pageWidth = 0;
@@ -1035,6 +1037,8 @@ function closeSearch() {
   clearSearchHighlights();
   searchMatches = [];
   searchCurrent = -1;
+  bookSearchResults = [];
+  currentBookSearchIndex = -1;
   document.getElementById('search-count').textContent = '';
   document.getElementById('search-input').value = '';
 }
@@ -1047,21 +1051,55 @@ function clearSearchHighlights() {
 
 function doSearch() {
   clearSearchHighlights();
+  searchMatches = [];
+  searchCurrent = -1;
+  bookSearchResults = [];
+  currentBookSearchIndex = -1;
   const query = document.getElementById('search-input').value.trim().toLowerCase();
   if (!query) {
     document.getElementById('search-count').textContent = '';
-    searchMatches = [];
-    searchCurrent = -1;
     return;
   }
-  searchMatches = [...document.querySelectorAll('#content .word')].filter(w =>
-    w.textContent.toLowerCase().includes(query)
-  );
-  searchMatches.forEach(w => w.classList.add('search-match'));
-  if (searchMatches.length > 0) {
-    goToSearchMatch(0);
+  if (query.length < 2) {
+    document.getElementById('search-count').textContent = 'Min 2 characters';
+    return;
+  }
+  document.getElementById('search-count').textContent = 'Searching…';
+  fetch(`/api/books/${bookId}/search?q=${encodeURIComponent(query)}`)
+    .then(r => r.json())
+    .then(results => {
+      if (!Array.isArray(results) || results.length === 0) {
+        document.getElementById('search-count').textContent = 'No matches in book';
+        return;
+      }
+      bookSearchResults = results;
+      goToBookSearchResult(0);
+    })
+    .catch(() => {
+      document.getElementById('search-count').textContent = 'Search failed';
+    });
+}
+
+function goToBookSearchResult(index) {
+  if (index < 0 || index >= bookSearchResults.length) return;
+  currentBookSearchIndex = index;
+  const result = bookSearchResults[index];
+  const query = document.getElementById('search-input').value.trim().toLowerCase();
+  const loadTarget = () => {
+    const occurrenceInChapter = bookSearchResults.slice(0, index).filter(r => r.chapterIndex === result.chapterIndex).length;
+    searchMatches = [...document.querySelectorAll('#content .word')].filter(w =>
+      w.textContent.toLowerCase().includes(query)
+    );
+    searchMatches.forEach(w => w.classList.add('search-match'));
+    goToSearchMatch(occurrenceInChapter);
+    document.getElementById('search-count').textContent = `${index + 1} / ${bookSearchResults.length}`;
+  };
+  if (result.chapterIndex !== currentIndex) {
+    loadChapter(result.chapterIndex, false, 0).then(() => {
+      setTimeout(loadTarget, 200);
+    });
   } else {
-    document.getElementById('search-count').textContent = 'No matches';
+    loadTarget();
   }
 }
 
@@ -1083,8 +1121,14 @@ function goToSearchMatch(index) {
 
 document.getElementById('search-btn').addEventListener('click', openSearch);
 document.getElementById('search-close').addEventListener('click', closeSearch);
-document.getElementById('search-prev').addEventListener('click', () => goToSearchMatch(searchCurrent - 1));
-document.getElementById('search-next').addEventListener('click', () => goToSearchMatch(searchCurrent + 1));
+document.getElementById('search-prev').addEventListener('click', () => {
+  if (bookSearchResults.length > 0) goToBookSearchResult(currentBookSearchIndex - 1);
+  else goToSearchMatch(searchCurrent - 1);
+});
+document.getElementById('search-next').addEventListener('click', () => {
+  if (bookSearchResults.length > 0) goToBookSearchResult(currentBookSearchIndex + 1);
+  else goToSearchMatch(searchCurrent + 1);
+});
 
 let searchTimeout;
 document.getElementById('search-input').addEventListener('input', () => {
@@ -1092,7 +1136,11 @@ document.getElementById('search-input').addEventListener('input', () => {
   searchTimeout = setTimeout(doSearch, 300);
 });
 document.getElementById('search-input').addEventListener('keydown', e => {
-  if (e.key === 'Enter') { e.preventDefault(); goToSearchMatch(searchCurrent + (e.shiftKey ? -1 : 1)); }
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    if (bookSearchResults.length > 0) goToBookSearchResult(currentBookSearchIndex + (e.shiftKey ? -1 : 1));
+    else goToSearchMatch(searchCurrent + (e.shiftKey ? -1 : 1));
+  }
   if (e.key === 'Escape') closeSearch();
 });
 

@@ -1,5 +1,5 @@
 require('dotenv').config();
-const APP_VERSION = 'v4.58';
+const APP_VERSION = 'v4.60';
 const express = require('express');
 const crypto = require('crypto');
 const multer = require('multer');
@@ -492,20 +492,20 @@ app.post('/api/translate', async (req, res) => {
   try {
     let prompt;
     if (type === 'context-combined') {
-      // Single call: translate full sentence AND mark the target word with [HL]...[/HL]
-      prompt = `You are an expert literary translator. Translate the following Spanish sentence into natural, fluent English that sounds like a native speaker wrote it. The Spanish word or phrase "${text}" is the focus word.
+      // Single call: translate full sentence AND mark the target word/phrase with [HL]...[/HL]
+      prompt = `You are an expert literary translator. Translate this Spanish sentence into natural English. The focus is the word or phrase in quotes below.
 
-Rules:
-1. Provide a highly natural, context-aware English translation of the ENTIRE sentence. Do not be overly literal if it sounds clunky.
-2. Identify the exact English words that correspond to the focus word "${text}".
-3. Wrap ONLY that translated English focus word/phrase with [HL] and [/HL] markers.
-4. Reply ONLY with the final English sentence, nothing else. No notes, no explanations.
+CRITICAL: Your reply MUST be exactly one English sentence with the part that translates the focus wrapped in [HL] and [/HL]. Example: [HL]this part[/HL]. No other text.
 
-Example:
-Sentence: "El hombre tenía una plaza en el colegio" | Focus: "una plaza"
+Examples:
+Focus "una plaza" | Sentence: "El hombre tenía una plaza en el colegio."
 Reply: The man had [HL]a spot[/HL] at the school.
 
-Sentence: "${sentence}"`;
+Focus "Se convertirá" | Sentence: "Se convertirá en el campeón."
+Reply: [HL]He will become[/HL] the champion.
+
+Now translate. Focus "${text}" | Sentence: "${sentence}"
+Reply:`;
     } else if (type === 'context-sentence') {
       prompt = `Translate the following Spanish sentence to English. Reply ONLY with the translated English sentence, nothing else. Sentence: "${text}"`;
     } else {
