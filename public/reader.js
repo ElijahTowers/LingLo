@@ -503,6 +503,16 @@ document.getElementById('content').addEventListener('click', async e => {
       transEl.className = 'sidebar-translation';
     }
     updateSaveBtn(word);
+
+    // Auto-translate the context sentence (with word highlighted in translation)
+    if (currentSentence) {
+      const sentTransEl = document.getElementById('sentence-translation');
+      sentTransEl.innerHTML = '';
+      sentTransEl.classList.add('visible');
+      fetchSentenceTranslation(word, currentSentence)
+        .then(result => { sentTransEl.innerHTML = hlToHtml(result); })
+        .catch(() => { sentTransEl.innerHTML = ''; sentTransEl.classList.remove('visible'); });
+    }
   }
 });
 
