@@ -1,5 +1,5 @@
 require('dotenv').config();
-const APP_VERSION = 'v4.63';
+const APP_VERSION = 'v4.64';
 const express = require('express');
 const crypto = require('crypto');
 const multer = require('multer');
@@ -96,6 +96,90 @@ function timingSafeCompare(a, b) {
 function authMiddleware(req, res, next) {
   if (isAuthed(req.headers.cookie)) return next();
   res.redirect('/login');
+}
+
+async function ollamaGenerateText(prompt, model = 'qwen2.5-coder:7b') {
+  const r = await fetch('http://localhost:11435/api/generate', {
+    headers: { 'X-Source': 'linglo' },
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model, prompt, stream: true })
+  });
+  if (!r.ok || !r.body) throw new Error('Ollama not available');
+  const reader = r.body.getReader();
+  const decoder = new TextDecoder();
+  let out = '';
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    for (const line of decoder.decode(value).split('\n')) {
+      if (!line.trim()) continue;
+      try {
+        const json = JSON.parse(line);
+        if (json.response) out += json.response;
+      } catch { }
+    }
+  }
+  return out.trim();
+}
+
+function tokenizeForHighlight(text) {
+  const tokens = [];
+  const re = /[A-Za-zÀ-ÖØ-öø-ÿ']+/g;
+  let match;
+  while ((match = re.exec(text)) !== null) {
+    tokens.push({
+      value: match[0].toLowerCase(),
+      start: match.index,
+      end: match.index + match[0].length
+    });
+  }
+  return tokens;
+}
+
+function findHighlightSpan(sentenceTranslation, focusTranslation) {
+  const sentenceTokens = tokenizeForHighlight(sentenceTranslation);
+  const focusTokens = tokenizeForHighlight(focusTranslation);
+  if (!sentenceTokens.length || !focusTokens.length) return null;
+
+  const focusPhrase = focusTokens.map(t => t.value).join(' ');
+  let best = null;
+
+  for (let start = 0; start < sentenceTokens.length; start++) {
+    for (let len = Math.max(1, focusTokens.length - 1); len <= Math.min(sentenceTokens.length - start, focusTokens.length + 2); len++) {
+      const window = sentenceTokens.slice(start, start + len);
+      const windowPhrase = window.map(t => t.value).join(' ');
+      let score = 0;
+
+      if (windowPhrase === focusPhrase) score += 100;
+
+      const focusSet = new Set(focusTokens.map(t => t.value));
+      const windowSet = new Set(window.map(t => t.value));
+      for (const token of windowSet) {
+        if (focusSet.has(token)) score += 12;
+      }
+
+      if (window[0]?.value === focusTokens[0]?.value) score += 4;
+      if (window[window.length - 1]?.value === focusTokens[focusTokens.length - 1]?.value) score += 4;
+      score -= Math.abs(window.length - focusTokens.length) * 3;
+
+      if (!best || score > best.score) {
+        best = {
+          score,
+          start: window[0].start,
+          end: window[window.length - 1].end
+        };
+      }
+    }
+  }
+
+  return best && best.score > 0 ? best : null;
+}
+
+function withHighlight(sentenceTranslation, focusTranslation) {
+  const span = findHighlightSpan(sentenceTranslation, focusTranslation);
+  if (!span) return sentenceTranslation;
+  return `${sentenceTranslation.slice(0, span.start)}[HL]${sentenceTranslation.slice(span.start, span.end)}[/HL]${sentenceTranslation.slice(span.end)}`;
 }
 
 // ── Parsers ──
@@ -507,30 +591,27 @@ app.post('/api/translate', async (req, res) => {
   try {
     let prompt;
     if (type === 'context-combined') {
-      // Single call: translate full sentence AND mark the target word/phrase with [HL]...[/HL]
-      prompt = `You are an expert literary translator. Translate this Spanish sentence into natural English. The focus is the word or phrase in quotes below.
+      const sentenceTranslation = await ollamaGenerateText(
+        `Translate the following Spanish sentence to natural English. Reply ONLY with the translated English sentence, nothing else.\n\nSentence: "${sentence}"`
+      );
+      const focusTranslation = await ollamaGenerateText(
+        `Translate the Spanish word or phrase "${text}" in the context of this sentence: "${sentence}".
 
-CRITICAL: Your reply MUST be exactly one English sentence with ONLY the smallest exact English equivalent of the focus wrapped in [HL] and [/HL]. Example: [HL]this part[/HL]. No other text.
+Reply ONLY with the smallest exact English equivalent for that word or phrase.
 
-Do NOT highlight surrounding helper verbs, determiners, or adjectives unless they are part of the direct translation of the focus itself.
-If the focus is a noun, highlight only the noun phrase that translates that noun.
-If the focus is a phrase or verbal expression, highlight only the exact English words for that phrase, not extra surrounding context.
+Rules:
+- No extra surrounding words
+- No subject pronouns unless they are part of the focus itself
+- No explanations
+- No quotes
 
 Examples:
-Focus "una plaza" | Sentence: "El hombre tenía una plaza en el colegio."
-Reply: The man had [HL]a spot[/HL] at the school.
-
-Focus "Se convertirá" | Sentence: "Se convertirá en el campeón."
-Reply: [HL]He will become[/HL] the champion.
-
-Focus "llamadas" | Sentence: "Hizo llamadas telefónicas importantes y volvió a gritar."
-Reply: He made important [HL]phone calls[/HL] and shouted again.
-
-Focus "se dio cuenta" | Sentence: "Al final se dio cuenta de la verdad."
-Reply: In the end [HL]he realized[/HL] the truth.
-
-Now translate. Focus "${text}" | Sentence: "${sentence}"
-Reply:`;
+"llamadas" -> "phone calls"
+"llamarse" in "Podría llamarse Harvey." -> "be named"
+"se dio cuenta" -> "realized"`
+      );
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      return res.end(withHighlight(sentenceTranslation, focusTranslation));
     } else if (type === 'context-sentence') {
       prompt = `Translate the following Spanish sentence to English. Reply ONLY with the translated English sentence, nothing else. Sentence: "${text}"`;
     } else {
