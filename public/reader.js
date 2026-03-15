@@ -1456,10 +1456,7 @@ function goToSearchMatch(index) {
   const firstEl = Array.isArray(matchGroup) ? matchGroup[0] : matchGroup;
   matchGroup.forEach(w => w.classList.add('search-current'));
   if (pageWidth > 0 && firstEl) {
-    const textCol = document.getElementById('text-column');
-    const elLeft = firstEl.getBoundingClientRect().left - textCol.getBoundingClientRect().left;
-    const absLeft = elLeft + currentPage * pageWidth;
-    const matchPage = Math.max(0, Math.floor(absLeft / pageWidth));
+    const matchPage = Math.max(0, Math.min(totalPages - 1, Math.floor(firstEl.offsetLeft / pageWidth)));
     if (matchPage !== currentPage) goToPage(matchPage);
   }
   document.getElementById('search-count').textContent = `${searchCurrent + 1} / ${searchMatches.length}`;
