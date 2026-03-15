@@ -184,7 +184,6 @@ function renderLayoutFixture() {
   document.getElementById('explanation').classList.toggle('visible', fixture.explainVisible);
   document.getElementById('explain-model').textContent = fixture.model;
   document.getElementById('explain-model').classList.toggle('visible', fixture.explainVisible);
-  document.getElementById('word-view').classList.toggle('explaining', fixture.explainVisible);
   document.getElementById('conjugation').textContent = fixtureScenario === 'phrase' ? '' : 'not a conjugated form';
   document.getElementById('conjugation').classList.toggle('visible', fixtureScenario !== 'phrase');
   document.getElementById('page-summary-text').textContent = 'Layout fixture mode';
@@ -660,7 +659,6 @@ function showWordView(word, sentence) {
   const expEl = document.getElementById('explanation');
   expEl.textContent = '';
   expEl.classList.remove('visible');
-  document.getElementById('word-view').classList.remove('explaining');
   document.getElementById('explain-btn').textContent = '✦ Explain';
   const modelEl = document.getElementById('explain-model');
   modelEl.textContent = '';
@@ -687,7 +685,6 @@ function showWordView(word, sentence) {
 function clearWordView() {
   document.getElementById('sidebar-empty').style.display = '';
   document.getElementById('word-view').style.display = 'none';
-  document.getElementById('word-view').classList.remove('explaining');
   document.getElementById('rarity-badge').innerHTML = '';
   document.getElementById('explanation').textContent = '';
   document.getElementById('explanation').classList.remove('visible');
@@ -797,7 +794,6 @@ document.getElementById('explain-btn').addEventListener('click', async () => {
   const btn = document.getElementById('explain-btn');
   btn.textContent = 'Asking AI…';
   btn.disabled = true;
-  document.getElementById('word-view').classList.add('explaining');
   expEl.classList.add('visible');
   expEl.textContent = '';
 

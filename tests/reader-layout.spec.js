@@ -81,25 +81,25 @@ test.describe('reader layout fixtures', () => {
       await openFixture(page, 'explain', viewport);
 
       await expect(page.locator('#sidebar')).toHaveScreenshot(`reader-explain-${viewport.name}.png`);
+      await expectButtonsInsideSidebar(page);
 
       const metrics = await page.evaluate(() => {
-        const area = document.querySelector('.sidebar-explain-area');
+        const panel = document.getElementById('panel-translate');
         const model = document.getElementById('explain-model');
-        area.scrollTop = 0;
-        area.scrollTop = area.scrollHeight;
-        const areaRect = area.getBoundingClientRect();
+        panel.scrollTop = 0;
+        panel.scrollTop = panel.scrollHeight;
+        const panelRect = panel.getBoundingClientRect();
         const modelRect = model.getBoundingClientRect();
         return {
-          clientHeight: area.clientHeight,
-          scrollHeight: area.scrollHeight,
+          clientHeight: panel.clientHeight,
+          scrollHeight: panel.scrollHeight,
           modelBottom: modelRect.bottom,
-          areaBottom: areaRect.bottom
+          panelBottom: panelRect.bottom
         };
       });
 
       expect(metrics.scrollHeight).toBeGreaterThanOrEqual(metrics.clientHeight);
-      expect(metrics.modelBottom).toBeLessThanOrEqual(metrics.areaBottom + 1);
-      await expectButtonsInsideSidebar(page);
+      expect(metrics.modelBottom).toBeLessThanOrEqual(metrics.panelBottom + 1);
     });
 
     test(`phrase layout stays reachable on ${viewport.name}`, async ({ page }) => {
