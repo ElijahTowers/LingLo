@@ -65,7 +65,26 @@
     .streak-label { font-size: 0.82rem; color: var(--text-muted); }
     .streak-goal-text { font-size: 0.78rem; color: var(--text-muted); }
     /* Header streak circle */
-    .streak-circle-btn { background: none; border: none; padding: 0; cursor: default; display: flex; align-items: center; flex-shrink: 0; }
+    .streak-circle-btn { background: none; border: none; padding: 0; cursor: pointer; display: flex; align-items: center; flex-shrink: 0; position: relative; }
+    .streak-popover {
+      position: absolute;
+      top: calc(100% + 10px);
+      right: 0;
+      min-width: 170px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: var(--surface);
+      border: 1px solid var(--border-strong);
+      box-shadow: var(--shadow-md);
+      color: var(--text);
+      font-size: 0.78rem;
+      line-height: 1.45;
+      display: none;
+      z-index: 20;
+    }
+    .streak-popover.visible { display: block; }
+    .streak-popover strong { display: block; font-size: 0.86rem; margin-bottom: 2px; }
+    .streak-anchor { position: relative; display: flex; align-items: center; }
     .continue-reading {
       display: none;
       align-items: center;
@@ -170,7 +189,10 @@
         <button class="theme-btn" data-theme="ereader">E-ink</button>
       </div>
       <div class="header-actions">
-        <div class="streak-circle-btn" id="header-streak-circle" title="Daily reading goal"></div>
+        <div class="streak-anchor">
+          <div class="streak-circle-btn" id="header-streak-circle" title="Daily reading goal"></div>
+          <div class="streak-popover" id="header-streak-popover"></div>
+        </div>
         <a href="/flashcards.html" class="btn btn-primary">
           ✦ Word list <span class="badge" id="word-count"></span>
         </a>
@@ -373,7 +395,7 @@
       const offset = +(circ * (1 - Math.min(1, pct / 100))).toFixed(2);
       const goalMet = pct >= 100;
       const stroke = goalMet ? '#34d399' : '#a78bfa';
-      const label = streak > 0 ? String(streak) : '';
+      const label = String(streak);
       const fs = streak > 99 ? Math.round(size * 0.22) : Math.round(size * 0.28);
       return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" style="display:block">
         <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="2.5"/>
@@ -411,7 +433,17 @@
         </div>
       `;
       document.getElementById('header-streak-circle').innerHTML = streakCircleSVG(pct, streak, 30);
+      document.getElementById('header-streak-popover').innerHTML = `<strong>${dailyWords} words today</strong>${streak} day streak`;
     }
+
+    document.getElementById('header-streak-circle').addEventListener('click', () => {
+      document.getElementById('header-streak-popover').classList.toggle('visible');
+    });
+    document.addEventListener('click', e => {
+      if (!e.target.closest('.streak-anchor')) {
+        document.getElementById('header-streak-popover').classList.remove('visible');
+      }
+    });
 
     loadBooks();
     loadWordCount();

@@ -33,6 +33,7 @@ const rarityCache = new Map();
 const frequencyCache = new Map();
 const regionalUsageCache = new Map();
 let activeFrequencyRequest = '';
+let readerStreakPopoverBound = false;
 async function fetchRarity(words) {
   const needed = words.filter(w => !rarityCache.has(w));
   if (needed.length > 0) {
@@ -1575,6 +1576,7 @@ async function logWordsRead(count, chapterIndex, pageNumber) {
 
 function renderReaderStreakCircle() {
   const el = document.getElementById('reader-streak-circle');
+  const popover = document.getElementById('reader-streak-popover');
   if (!el) return;
   const streak = streakStats.streak || 0;
   const goal = streakStats.goal || 500;
@@ -1584,7 +1586,7 @@ function renderReaderStreakCircle() {
   const r = 11, size = 28, circ = +(2 * Math.PI * r).toFixed(2);
   const offset = +(circ * (1 - pct / 100)).toFixed(2);
   const stroke = goalMet ? '#34d399' : '#a78bfa';
-  const label = streak > 0 ? String(streak) : '';
+  const label = String(streak);
   const fs = streak > 99 ? 6 : 8;
   el.innerHTML = `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
     <circle cx="14" cy="14" r="${r}" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="2.5"/>
@@ -1594,6 +1596,21 @@ function renderReaderStreakCircle() {
     <text x="14" y="14" text-anchor="middle" dominant-baseline="central"
       font-size="${fs}" font-weight="700" fill="${goalMet ? '#34d399' : 'currentColor'}" font-family="system-ui,sans-serif">${label}</text>
   </svg>`;
+  if (popover) {
+    popover.innerHTML = `<strong>${dailyWords} words today</strong>${streak} day streak`;
+  }
+  if (!readerStreakPopoverBound && popover) {
+    readerStreakPopoverBound = true;
+    el.addEventListener('click', e => {
+      e.stopPropagation();
+      popover.classList.toggle('visible');
+    });
+    document.addEventListener('click', e => {
+      if (!e.target.closest('.streak-anchor')) {
+        popover.classList.remove('visible');
+      }
+    });
+  }
 }
 
 // ── Page summary ──
