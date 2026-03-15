@@ -94,12 +94,14 @@ test.describe('reader layout fixtures', () => {
           clientHeight: panel.clientHeight,
           scrollHeight: panel.scrollHeight,
           modelBottom: modelRect.bottom,
-          panelBottom: panelRect.bottom
+          panelBottom: panelRect.bottom,
+          bottomGap: panelRect.bottom - modelRect.bottom
         };
       });
 
       expect(metrics.scrollHeight).toBeGreaterThanOrEqual(metrics.clientHeight);
       expect(metrics.modelBottom).toBeLessThanOrEqual(metrics.panelBottom + 1);
+      expect(metrics.bottomGap).toBeGreaterThanOrEqual(16);
     });
 
     test(`phrase layout stays reachable on ${viewport.name}`, async ({ page }) => {
@@ -118,12 +120,14 @@ test.describe('reader layout fixtures', () => {
           clientHeight: panel.clientHeight,
           scrollHeight: panel.scrollHeight,
           targetBottom: targetRect.bottom,
-          panelBottom: panelRect.bottom
+          panelBottom: panelRect.bottom,
+          bottomGap: panelRect.bottom - targetRect.bottom
         };
       });
 
       expect(metrics.scrollHeight).toBeGreaterThanOrEqual(metrics.clientHeight);
       expect(metrics.targetBottom).toBeLessThanOrEqual(metrics.panelBottom + 1);
+      expect(metrics.bottomGap).toBeGreaterThanOrEqual(16);
       await expectButtonsInsideSidebar(page);
       await expect(page.getByRole('button', { name: /save phrase/i })).toBeVisible();
     });

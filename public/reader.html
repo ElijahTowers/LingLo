@@ -221,6 +221,7 @@
       overscroll-behavior: contain;
       -webkit-overflow-scrolling: touch;
       touch-action: pan-y;
+      padding-bottom: env(safe-area-inset-bottom, 0px);
     }
     .tab-panel.hidden { display: none; }
     .tab-panel::-webkit-scrollbar { width: 4px; }
@@ -253,7 +254,7 @@
       flex-direction: column;
       gap: 4px;
       min-height: 100%;
-      padding-bottom: 32px;
+      padding-bottom: 24px;
     }
     .sidebar-word {
       font-family: var(--font-read);
@@ -361,6 +362,10 @@
     .sidebar-explain-area {
       margin-top: 16px;
       padding-bottom: 12px;
+    }
+    .sidebar-end-spacer {
+      flex-shrink: 0;
+      height: calc(96px + env(safe-area-inset-bottom, 0px));
     }
     #explanation {
       margin-top: 12px;
@@ -942,6 +947,7 @@
             <div id="explanation"></div>
             <div id="explain-model"></div>
           </div>
+          <div class="sidebar-end-spacer" aria-hidden="true"></div>
 
         </div>
       </div>
@@ -975,6 +981,6 @@
       <button class="popup-btn primary" id="popup-more-btn">Details →</button>
     </div>
   </div>
-  <script src="reader.js?v=4.67"></script>
+  <script src="reader.js?v=4.69"></script>
 </body>
 </html>
