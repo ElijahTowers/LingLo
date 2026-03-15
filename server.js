@@ -1,5 +1,5 @@
 require('dotenv').config();
-const APP_VERSION = 'v4.74';
+const APP_VERSION = 'v4.75';
 const express = require('express');
 const crypto = require('crypto');
 const multer = require('multer');
@@ -217,6 +217,52 @@ function withHighlight(sentenceTranslation, focusTranslation) {
   const span = findHighlightSpan(sentenceTranslation, focusTranslation);
   if (!span) return sentenceTranslation;
   return `${sentenceTranslation.slice(0, span.start)}[HL]${sentenceTranslation.slice(span.start, span.end)}[/HL]${sentenceTranslation.slice(span.end)}`;
+}
+
+function countWordTokens(text) {
+  return (text.match(/[A-Za-zÀ-ÖØ-öø-ÿ']+/g) || []).length;
+}
+
+async function translateSingleWordInContext(word, sentence) {
+  const basePrompt = `The user clicked the single Spanish word "${word}" in this sentence:
+"${sentence}"
+
+Translate ONLY that one word into English.
+
+Rules:
+- Return the smallest exact English equivalent of the clicked word only
+- Do not include words that translate neighboring Spanish words
+- If the clicked word is a preposition, article, pronoun, or particle, still translate only that single word
+- No explanations
+- No punctuation
+- No quotes
+
+Good examples:
+- "por" in "lo llevo por la estacion" -> "through"
+- "a" in "fue a la casa" -> "to"
+- "de" in "el libro de Harry" -> "of"
+- "llamarse" in "Podria llamarse Harvey" -> "be named"`;
+
+  let translation = await ollamaGenerateText(basePrompt);
+  if (countWordTokens(translation) <= 3) return translation.trim();
+
+  const retryPrompt = `Your previous answer was too broad because it included neighboring words.
+
+Clicked word: "${word}"
+Sentence: "${sentence}"
+Bad answer: "${translation}"
+
+Reply again with ONLY the smallest English equivalent of the clicked Spanish word itself.
+
+Rules:
+- Maximum 3 English words
+- No surrounding phrase
+- No explanations
+- No punctuation
+- No quotes`;
+
+  translation = await ollamaGenerateText(retryPrompt);
+  return translation.trim();
 }
 
 // ── Parsers ──
@@ -880,6 +926,8 @@ app.post('/api/translate', async (req, res) => {
   const { text, sentence, type } = req.body;
   if (!text?.trim()) return res.status(400).json({ error: 'No text provided' });
   try {
+    const trimmedText = text.trim();
+    const singleWordSelection = countWordTokens(trimmedText) === 1;
     let prompt;
     if (type === 'context-combined') {
       const sentenceTranslation = await ollamaGenerateText(
@@ -903,12 +951,15 @@ Examples:
       );
       res.setHeader('Content-Type', 'text/plain; charset=utf-8');
       return res.end(withHighlight(sentenceTranslation, focusTranslation));
+    } else if (singleWordSelection && sentence && sentence !== trimmedText) {
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      return res.end(await translateSingleWordInContext(trimmedText, sentence));
     } else if (type === 'context-sentence') {
-      prompt = `Translate the following Spanish sentence to English. Reply ONLY with the translated English sentence, nothing else. Sentence: "${text}"`;
+      prompt = `Translate the following Spanish sentence to English. Reply ONLY with the translated English sentence, nothing else. Sentence: "${trimmedText}"`;
     } else {
       prompt = (sentence && sentence !== text)
-        ? `Translate the Spanish word or phrase "${text.trim()}" in the context of this sentence: "${sentence}". Reply with ONLY the English translation of "${text.trim()}", nothing else.`
-        : `Translate the Spanish word or phrase "${text.trim()}" to English. Reply with ONLY the English translation, nothing else.`;
+        ? `Translate the Spanish word or phrase "${trimmedText}" in the context of this sentence: "${sentence}". Reply with ONLY the English translation of "${trimmedText}", nothing else.`
+        : `Translate the Spanish word or phrase "${trimmedText}" to English. Reply with ONLY the English translation, nothing else.`;
     }
 
     const r = await fetch('http://localhost:11435/api/generate', {
