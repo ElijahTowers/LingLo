@@ -144,6 +144,10 @@
     }
     .search-input::placeholder { color: var(--text-muted); }
     .search-input:focus { border-color: var(--purple); }
+    .deck-bar .btn-ghost {
+      padding: 6px 10px;
+      font-size: 0.8rem;
+    }
 
     /* ── Flashcard view ── */
     .progress-area {
@@ -595,7 +599,42 @@
 
   <div class="deck-bar">
     <select id="book-filter"><option value="">All books</option></select>
+    <select id="type-filter">
+      <option value="">All types</option>
+      <option value="word">Words only</option>
+      <option value="phrase">Phrases only</option>
+    </select>
+    <select id="rarity-filter">
+      <option value="">All rarity</option>
+      <option value="common">Common</option>
+      <option value="moderate">Moderate</option>
+      <option value="rare">Rare</option>
+      <option value="very-rare">Very rare</option>
+      <option value="unknown">Unknown</option>
+    </select>
+    <select id="meta-filter">
+      <option value="">All metadata</option>
+      <option value="has-sentence">With sentence</option>
+      <option value="no-sentence">Without sentence</option>
+      <option value="has-chapter">With chapter</option>
+      <option value="no-chapter">Without chapter</option>
+    </select>
+    <select id="sort-select">
+      <option value="newest">Newest first</option>
+      <option value="oldest">Oldest first</option>
+      <option value="word-az">Word A-Z</option>
+      <option value="word-za">Word Z-A</option>
+      <option value="translation-az">Translation A-Z</option>
+      <option value="translation-za">Translation Z-A</option>
+      <option value="book-az">Book A-Z</option>
+      <option value="chapter-az">Chapter A-Z</option>
+      <option value="rarity-common-first">Common first</option>
+      <option value="rarity-rare-first">Rare first</option>
+      <option value="shortest">Shortest first</option>
+      <option value="longest">Longest first</option>
+    </select>
     <input class="search-input" id="search-input" placeholder="Search words…" autocomplete="off">
+    <button class="btn btn-ghost" id="reset-filters-btn">Reset</button>
     <span class="deck-count" id="deck-count"></span>
   </div>
 
@@ -627,6 +666,28 @@
       return `<span class="rarity ${cls}">${label}</span>`;
     }
 
+    function normalizeText(text) {
+      return String(text || '')
+        .toLowerCase()
+        .replace(/[áàäâ]/g, 'a')
+        .replace(/[éèëê]/g, 'e')
+        .replace(/[íìïî]/g, 'i')
+        .replace(/[óòöô]/g, 'o')
+        .replace(/[úùüû]/g, 'u');
+    }
+
+    function getWordType(word) {
+      return /\s/.test((word || '').trim()) ? 'phrase' : 'word';
+    }
+
+    function getRarityBucket(zipf) {
+      if (zipf === null || zipf === undefined || zipf === '') return 'unknown';
+      if (zipf >= 5) return 'common';
+      if (zipf >= 3) return 'moderate';
+      if (zipf >= 1) return 'rare';
+      return 'very-rare';
+    }
+
     // ── Load words ──
     async function loadWords() {
       const res = await fetch('/api/words');
@@ -655,20 +716,73 @@
     }
 
     function getFilter() { return document.getElementById('book-filter').value; }
-    function getSearch() { return document.getElementById('search-input').value.trim().toLowerCase(); }
+    function getTypeFilter() { return document.getElementById('type-filter').value; }
+    function getRarityFilter() { return document.getElementById('rarity-filter').value; }
+    function getMetaFilter() { return document.getElementById('meta-filter').value; }
+    function getSort() { return document.getElementById('sort-select').value; }
+    function getSearch() { return normalizeText(document.getElementById('search-input').value.trim()); }
 
     function getFilteredWords() {
       const filter = getFilter();
+      const typeFilter = getTypeFilter();
+      const rarityFilter = getRarityFilter();
+      const metaFilter = getMetaFilter();
       const search = getSearch();
-      return allWords.filter(w => {
+      const filtered = allWords.filter(w => {
+        const wordType = getWordType(w.word);
+        const rarity = getRarityBucket(w.frequency);
         if (filter && w.book_title !== filter) return false;
+        if (typeFilter && wordType !== typeFilter) return false;
+        if (rarityFilter && rarity !== rarityFilter) return false;
+        if (metaFilter === 'has-sentence' && !w.sentence) return false;
+        if (metaFilter === 'no-sentence' && w.sentence) return false;
+        if (metaFilter === 'has-chapter' && !w.chapter_title) return false;
+        if (metaFilter === 'no-chapter' && w.chapter_title) return false;
         if (search) {
-          return w.word.toLowerCase().includes(search)
-            || w.translation.toLowerCase().includes(search)
-            || (w.sentence || '').toLowerCase().includes(search);
+          return normalizeText(w.word).includes(search)
+            || normalizeText(w.translation).includes(search)
+            || normalizeText(w.sentence || '').includes(search)
+            || normalizeText(w.book_title || '').includes(search)
+            || normalizeText(w.chapter_title || '').includes(search);
         }
         return true;
       });
+      const sort = getSort();
+      const sorted = [...filtered];
+      sorted.sort((a, b) => {
+        const wordA = normalizeText(a.word);
+        const wordB = normalizeText(b.word);
+        const translationA = normalizeText(a.translation);
+        const translationB = normalizeText(b.translation);
+        const bookA = normalizeText(a.book_title || '');
+        const bookB = normalizeText(b.book_title || '');
+        const chapterA = normalizeText(a.chapter_title || '');
+        const chapterB = normalizeText(b.chapter_title || '');
+        const dateA = new Date(a.created_at || 0).getTime();
+        const dateB = new Date(b.created_at || 0).getTime();
+        const rarityA = a.frequency ?? -Infinity;
+        const rarityB = b.frequency ?? -Infinity;
+        const lenA = (a.word || '').length;
+        const lenB = (b.word || '').length;
+
+        switch (sort) {
+          case 'oldest': return dateA - dateB;
+          case 'word-az': return wordA.localeCompare(wordB);
+          case 'word-za': return wordB.localeCompare(wordA);
+          case 'translation-az': return translationA.localeCompare(translationB);
+          case 'translation-za': return translationB.localeCompare(translationA);
+          case 'book-az': return bookA.localeCompare(bookB) || wordA.localeCompare(wordB);
+          case 'chapter-az': return chapterA.localeCompare(chapterB) || wordA.localeCompare(wordB);
+          case 'rarity-common-first': return rarityB - rarityA || wordA.localeCompare(wordB);
+          case 'rarity-rare-first': return rarityA - rarityB || wordA.localeCompare(wordB);
+          case 'shortest': return lenA - lenB || wordA.localeCompare(wordB);
+          case 'longest': return lenB - lenA || wordA.localeCompare(wordB);
+          case 'newest':
+          default:
+            return dateB - dateA;
+        }
+      });
+      return sorted;
     }
 
     function rebuildView() {
@@ -700,9 +814,22 @@
 
     // ── Filters ──
     document.getElementById('book-filter').addEventListener('change', rebuildView);
+    document.getElementById('type-filter').addEventListener('change', rebuildView);
+    document.getElementById('rarity-filter').addEventListener('change', rebuildView);
+    document.getElementById('meta-filter').addEventListener('change', rebuildView);
+    document.getElementById('sort-select').addEventListener('change', rebuildView);
     document.getElementById('search-input').addEventListener('input', () => {
       if (currentView === 'list') renderList();
       updateCount();
+    });
+    document.getElementById('reset-filters-btn').addEventListener('click', () => {
+      document.getElementById('book-filter').value = '';
+      document.getElementById('type-filter').value = '';
+      document.getElementById('rarity-filter').value = '';
+      document.getElementById('meta-filter').value = '';
+      document.getElementById('sort-select').value = 'newest';
+      document.getElementById('search-input').value = '';
+      rebuildView();
     });
 
     // ── Deck (cards view) ──
