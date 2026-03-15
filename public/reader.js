@@ -85,12 +85,14 @@ function updateProgressUrl(chapter, ratio) {
 
 function saveProgress() {
   const ratio = totalPages > 1 ? currentPage / (totalPages - 1) : 0;
+  const progress = {
+    chapter: currentIndex,
+    ratio,
+    total: chapters.length
+  };
   try {
-    localStorage.setItem(`linglo-progress-${bookId}`, JSON.stringify({
-      chapter: currentIndex,
-      ratio,
-      total: chapters.length
-    }));
+    localStorage.setItem(`linglo-progress-${bookId}`, JSON.stringify(progress));
+    localStorage.setItem('linglo-last-reader-url', `/reader.html?book=${bookId}&ch=${currentIndex}&r=${ratio}`);
   } catch {}
   updateProgressUrl(currentIndex, ratio);
 }

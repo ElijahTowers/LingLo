@@ -122,6 +122,25 @@
   </main>
 
   <script>
+    function getSavedProgress(bookId) {
+      try {
+        const progress = JSON.parse(localStorage.getItem(`linglo-progress-${bookId}`));
+        if (!progress || typeof progress.chapter !== 'number') return null;
+        return {
+          chapter: progress.chapter,
+          ratio: typeof progress.ratio === 'number' ? Math.max(0, Math.min(1, progress.ratio)) : 0,
+          total: typeof progress.total === 'number' ? progress.total : 0
+        };
+      } catch {
+        return null;
+      }
+    }
+
+    function getReaderHref(bookId, progress) {
+      if (!progress) return `/reader.html?book=${bookId}`;
+      return `/reader.html?book=${bookId}&ch=${progress.chapter}&r=${progress.ratio}`;
+    }
+
     async function loadBooks() {
       const res = await fetch('/api/books');
       const books = await res.json();
@@ -131,18 +150,15 @@
         return;
       }
       grid.innerHTML = books.map(b => {
-        let pct = 0;
-        try {
-          const p = JSON.parse(localStorage.getItem(`linglo-progress-${b.id}`));
-          if (p && typeof p.chapter === 'number' && p.total > 0) {
-            pct = Math.round(((p.chapter + (p.ratio || 0)) / p.total) * 100);
-          }
-        } catch {}
+        const progress = getSavedProgress(b.id);
+        const pct = progress && progress.total > 0
+          ? Math.round(((progress.chapter + progress.ratio) / progress.total) * 100)
+          : 0;
         const progressBar = pct > 0
           ? `<div class="book-progress"><div class="book-progress-fill" style="width:${pct}%"></div></div>`
           : '';
         return `
-        <a class="book-card" href="/reader.html?book=${b.id}">
+        <a class="book-card" href="${getReaderHref(b.id, progress)}">
           <div class="book-spine"></div>
           <div class="book-cover">
             <div class="book-title">${b.title}</div>

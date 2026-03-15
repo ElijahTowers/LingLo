@@ -1,5 +1,5 @@
 require('dotenv').config();
-const APP_VERSION = 'v4.71';
+const APP_VERSION = 'v4.72';
 const express = require('express');
 const crypto = require('crypto');
 const multer = require('multer');
