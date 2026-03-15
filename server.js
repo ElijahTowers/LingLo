@@ -1,5 +1,5 @@
 require('dotenv').config();
-const APP_VERSION = 'v4.64';
+const APP_VERSION = 'v4.65';
 const express = require('express');
 const crypto = require('crypto');
 const multer = require('multer');
@@ -11,7 +11,7 @@ const { EPub } = require('epub2');
 const Database = require('better-sqlite3');
 
 const app = express();
-const PORT = 3200;
+const PORT = parseInt(process.env.PORT || '3200', 10);
 
 for (const dir of ['uploads', 'db', 'public']) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });

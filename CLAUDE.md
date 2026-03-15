@@ -82,6 +82,38 @@ macOS `say -v Monica` as fallback if venv missing. Setup: `./setup-piper.sh`.
 - **Fold 7 cover screen touch**: `.sidebar-backdrop` was `display:block` on narrow screens with no `pointer-events:none`, silently swallowing all touch events. Fixed by adding `pointer-events:none` by default, `pointer-events:auto` only when `.visible`.
 - **Mobile Touch Events (New Features)**: Standard `click` listeners can be unreliable on iOS Safari for dynamically added buttons or custom dropdowns. *Always ensure newly added interactive features are fully responsive to touch (using `touchstart` or robust click delegation) so that they work on mobile devices just like a mouse click would.*
 
+## Layout safety rules
+
+Treat layout regressions as test failures, not as manual polish items.
+
+- Exactly one element should own vertical scrolling in each region.
+- Any flex child that needs to shrink must explicitly set `min-width: 0` or `min-height: 0`.
+- Do not rely on `overflow: hidden` to hide important text.
+- Fixed bars, headers, and footers must reserve space explicitly.
+- Long AI output, long translations, and long button labels must be considered first-class layout cases, not edge cases.
+
+## Layout test workflow
+
+Before shipping any reader/sidebar/layout change:
+
+1. Run `source ~/.nvm/nvm.sh && npm run test:layout`
+2. If the intended UI changed, update snapshots with `source ~/.nvm/nvm.sh && npm run test:layout:update`
+3. Verify the fixture scenarios on the viewport matrix:
+   - small phone
+   - large phone
+   - tablet portrait
+   - tablet landscape
+   - narrow desktop
+   - wide desktop
+
+The Playwright fixture route is `reader.html?fixture=layout&scenario=...` and is meant to catch:
+
+- clipped text
+- unreachable explanation text
+- broken sidebar scrolling
+- wrapped button labels
+- overflow caused by long translations or phrases
+
 ## Deploy from MacBook
 
 Typical deploy workflow (run from MacBook in project dir):

@@ -1,6 +1,8 @@
 const params = new URLSearchParams(location.search);
 const bookId = params.get('book');
-if (!bookId) location.href = '/';
+const fixtureMode = params.get('fixture') === 'layout';
+const fixtureScenario = params.get('scenario') || 'explain';
+if (!bookId && !fixtureMode) location.href = '/';
 
 // ── Sentence translation helpers ──
 function hlToHtml(text) {
@@ -102,9 +104,96 @@ window.addEventListener('beforeunload', onPageLeave);
 // ── Init ──
 async function init() {
   renderReaderStreakCircle();
+  if (fixtureMode) {
+    renderLayoutFixture();
+    return;
+  }
   await Promise.all([loadSavedWords(), loadChapters()]);
   const { chapter, ratio } = loadProgress();
   await loadChapter(chapter, false, ratio);
+}
+
+function renderLayoutFixture() {
+  const fixture = {
+    explain: {
+      word: 'llamarse',
+      translation: 'be named',
+      altMeanings: ['be called', 'go by the name', 'be known as'],
+      sentence: 'Podria llamarse Harvey, pero nadie estaba seguro de ello hasta mucho despues, cuando por fin encontraron una pista mejor.',
+      sentenceTranslation: 'He could [HL]be named[/HL] Harvey, but nobody was sure until much later, when they finally found a better clue.',
+      explanation: [
+        'Meaning in context: this is a reflexive verb meaning to be called or to be named.',
+        'Grammar note: despues de "podria", the infinitive stays unchanged, so "llamarse" keeps its reflexive ending.',
+        'Usage note: in natural English this often maps to "be called" or "be named", depending on whether the sentence sounds more formal or descriptive.',
+        'Nuance: the reflexive form is about what someone or something is called, not about physically calling someone on the phone.',
+        'Memory tip: think of "como se llama?" where the reflexive form points to the name a person goes by.',
+        'Extra note: long AI answers should remain fully reachable in this fixture so viewport regressions show up immediately in tests.'
+      ].join('\n\n'),
+      model: 'qwen2.5-coder:7b',
+      explainVisible: true
+    },
+    phrase: {
+      word: 'se dio cuenta',
+      translation: 'realized',
+      altMeanings: ['noticed', 'became aware', 'figured it out'],
+      sentence: 'Al final se dio cuenta de la verdad cuando vio la carta escondida detras del espejo roto.',
+      sentenceTranslation: 'In the end [HL]she realized[/HL] the truth when she saw the letter hidden behind the broken mirror.',
+      explanation: '',
+      model: '',
+      explainVisible: false
+    }
+  }[fixtureScenario] || null;
+
+  if (!fixture) return;
+
+  document.body.dataset.fixtureMode = 'layout';
+  document.getElementById('chapter-counter').textContent = '8/37';
+  document.getElementById('progress-bar').style.width = '42%';
+  document.getElementById('chapter-title').textContent = 'Fixture Chapter';
+  document.getElementById('content').innerHTML = `
+    <p>Esta es una pagina de prueba para validar layout, scroll y visibilidad del texto en la experiencia de lectura.</p>
+    <p>Debe seguir siendo legible en movil, tablet, escritorio estrecho y escritorio ancho sin cortar contenido importante.</p>
+    <p>Los paneles laterales, explicaciones largas, traducciones de contexto y frases largas deben seguir siendo completamente alcanzables.</p>
+  `;
+
+  currentWord = fixture.word;
+  currentSentence = fixture.sentence;
+  currentTranslation = fixture.translation;
+
+  document.getElementById('sidebar-empty').style.display = 'none';
+  document.getElementById('word-view').style.display = 'flex';
+  document.getElementById('sidebar-word').textContent = fixture.word;
+  document.getElementById('rarity-badge').innerHTML = rarityBadge(3.4);
+  document.getElementById('sidebar-translation').textContent = fixture.translation;
+  document.getElementById('sidebar-translation').className = 'sidebar-translation';
+  document.getElementById('alt-meanings').innerHTML = fixture.altMeanings
+    .map(line => `<div class="alt-meaning-item">${escapeHtml(line)}</div>`)
+    .join('');
+  document.getElementById('alt-meanings-wrap').classList.add('visible');
+  document.getElementById('idiom-note').textContent = fixtureScenario === 'phrase'
+    ? 'Fixed expression: this phrase often means suddenly understanding something.'
+    : '';
+  document.getElementById('idiom-note').classList.toggle('visible', fixtureScenario === 'phrase');
+  document.getElementById('sidebar-sentence').innerHTML = fixture.sentence.replace(
+    new RegExp(`(${fixture.word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'i'),
+    '<span class="hl">$1</span>'
+  );
+  document.getElementById('sentence-translation').innerHTML = hlToHtml(fixture.sentenceTranslation);
+  document.getElementById('sentence-translation').classList.add('visible');
+  document.getElementById('explanation').textContent = fixture.explanation;
+  document.getElementById('explanation').classList.toggle('visible', fixture.explainVisible);
+  document.getElementById('explain-model').textContent = fixture.model;
+  document.getElementById('explain-model').classList.toggle('visible', fixture.explainVisible);
+  document.getElementById('word-view').classList.toggle('explaining', fixture.explainVisible);
+  document.getElementById('conjugation').textContent = fixtureScenario === 'phrase' ? '' : 'not a conjugated form';
+  document.getElementById('conjugation').classList.toggle('visible', fixtureScenario !== 'phrase');
+  document.getElementById('page-summary-text').textContent = 'Layout fixture mode';
+  updateSaveBtn(currentWord);
+  openSidebar();
+
+  requestAnimationFrame(() => {
+    document.body.dataset.fixtureReady = 'true';
+  });
 }
 
 async function loadSavedWords() {

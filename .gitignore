@@ -22,3 +22,7 @@ piper/*.dylib
 piper/*.dSYM/
 piper/pkgconfig/
 .env
+playwright-report/
+test-results/
+playwright/.cache/
+tests/.auth/
