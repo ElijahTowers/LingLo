@@ -66,9 +66,87 @@
     .streak-goal-text { font-size: 0.78rem; color: var(--text-muted); }
     /* Header streak circle */
     .streak-circle-btn { background: none; border: none; padding: 0; cursor: default; display: flex; align-items: center; flex-shrink: 0; }
+    .continue-reading {
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      background: linear-gradient(135deg, rgba(168,95,46,0.16), rgba(35,30,24,0.96));
+      border: 1px solid rgba(212,135,74,0.28);
+      border-radius: 14px;
+      padding: 20px 22px;
+      margin-bottom: 28px;
+      text-decoration: none;
+      color: inherit;
+      box-shadow: var(--shadow-md);
+    }
+    .continue-reading.visible { display: flex; }
+    .continue-copy { min-width: 0; }
+    .continue-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: rgba(237,224,204,0.62);
+      margin-bottom: 8px;
+    }
+    .continue-title {
+      font-size: 1.35rem;
+      font-weight: 600;
+      line-height: 1.1;
+      color: var(--text);
+      font-family: var(--font-read);
+      margin-bottom: 6px;
+    }
+    .continue-meta {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+    }
+    .continue-action {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.06);
+      color: var(--text);
+      font-size: 0.88rem;
+      font-weight: 600;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    body.theme-light .continue-reading {
+      background: linear-gradient(135deg, rgba(139,69,19,0.1), rgba(242,236,226,0.96));
+      border-color: rgba(139,69,19,0.24);
+    }
+    body.theme-light .continue-label { color: rgba(30,22,16,0.56); }
+    body.theme-light .continue-action {
+      border-color: rgba(0,0,0,0.12);
+      background: rgba(255,255,255,0.55);
+    }
+    body.theme-ereader .continue-reading {
+      background: #f8f8f8;
+      border-color: rgba(0,0,0,0.2);
+      box-shadow: none;
+    }
+    body.theme-ereader .continue-label { color: #666666; }
+    body.theme-ereader .continue-action {
+      border-color: rgba(0,0,0,0.18);
+      background: #ffffff;
+      color: #000000;
+    }
     @media (max-width: 540px) {
       .streak-widget { gap: 14px; padding: 14px 16px; margin-bottom: 20px; }
       .streak-count { font-size: 1.2rem; }
+      .continue-reading {
+        flex-direction: column;
+        align-items: flex-start;
+        padding: 16px;
+        gap: 14px;
+      }
+      .continue-title { font-size: 1.15rem; }
+      .continue-action { width: 100%; justify-content: center; }
     }
   </style>
 </head>
@@ -106,6 +184,15 @@
       <p>Click a book to start reading. Click any word to translate it.</p>
     </div>
 
+    <a class="continue-reading" id="continue-reading" href="/">
+      <div class="continue-copy">
+        <div class="continue-label">Continue Reading</div>
+        <div class="continue-title" id="continue-title"></div>
+        <div class="continue-meta" id="continue-meta"></div>
+      </div>
+      <div class="continue-action">Resume book →</div>
+    </a>
+
     <div class="streak-widget" id="streak-widget"></div>
 
     <div class="upload-area" id="upload-area">
@@ -141,10 +228,50 @@
       return `/reader.html?book=${bookId}&ch=${progress.chapter}&r=${progress.ratio}`;
     }
 
+    function getLastReaderState() {
+      try {
+        const href = localStorage.getItem('linglo-last-reader-url');
+        if (!href) return null;
+        const url = new URL(href, window.location.origin);
+        const bookId = parseInt(url.searchParams.get('book'), 10);
+        if (isNaN(bookId)) return null;
+        const chapter = parseInt(url.searchParams.get('ch'), 10);
+        const ratio = parseFloat(url.searchParams.get('r'));
+        return {
+          href: `${url.pathname}${url.search}`,
+          bookId,
+          chapter: isNaN(chapter) ? 0 : chapter,
+          ratio: isNaN(ratio) ? 0 : Math.max(0, Math.min(1, ratio))
+        };
+      } catch {
+        return null;
+      }
+    }
+
+    function renderContinueReading(books) {
+      const card = document.getElementById('continue-reading');
+      const last = getLastReaderState();
+      if (!last) return;
+      const book = books.find(b => b.id === last.bookId);
+      if (!book) return;
+      const progress = getSavedProgress(book.id) || { chapter: last.chapter, ratio: last.ratio, total: 0 };
+      const chapterLabel = `Chapter ${progress.chapter + 1}`;
+      const pct = progress.total > 0
+        ? Math.round(((progress.chapter + progress.ratio) / progress.total) * 100)
+        : null;
+      document.getElementById('continue-title').textContent = book.title;
+      document.getElementById('continue-meta').textContent = pct === null
+        ? `${book.author || 'Unknown author'} • ${chapterLabel}`
+        : `${book.author || 'Unknown author'} • ${chapterLabel} • ${pct}% read`;
+      card.href = getReaderHref(book.id, progress);
+      card.classList.add('visible');
+    }
+
     async function loadBooks() {
       const res = await fetch('/api/books');
       const books = await res.json();
       const grid = document.getElementById('book-grid');
+      renderContinueReading(books);
       if (books.length === 0) {
         grid.innerHTML = '<p class="empty-msg">No books yet. Upload an EPUB above.</p>';
         return;
