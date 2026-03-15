@@ -619,6 +619,14 @@
       <option value="has-chapter">With chapter</option>
       <option value="no-chapter">Without chapter</option>
     </select>
+    <select id="book-frequency-filter">
+      <option value="">All book frequency</option>
+      <option value="0">Not found in indexed book</option>
+      <option value="1">Appears once</option>
+      <option value="2-5">Appears 2-5x</option>
+      <option value="6-20">Appears 6-20x</option>
+      <option value="21+">Appears 21+x</option>
+    </select>
     <select id="sort-select">
       <option value="newest">Newest first</option>
       <option value="oldest">Oldest first</option>
@@ -630,6 +638,8 @@
       <option value="chapter-az">Chapter A-Z</option>
       <option value="rarity-common-first">Common first</option>
       <option value="rarity-rare-first">Rare first</option>
+      <option value="book-frequency-high">Book frequency high-low</option>
+      <option value="book-frequency-low">Book frequency low-high</option>
       <option value="shortest">Shortest first</option>
       <option value="longest">Longest first</option>
     </select>
@@ -689,6 +699,15 @@
       return 'very-rare';
     }
 
+    function getBookFrequencyBucket(count) {
+      if (count === null || count === undefined) return '';
+      if (count === 0) return '0';
+      if (count === 1) return '1';
+      if (count <= 5) return '2-5';
+      if (count <= 20) return '6-20';
+      return '21+';
+    }
+
     // ── Load words ──
     async function loadWords() {
       const res = await fetch('/api/words');
@@ -721,6 +740,7 @@
     function getTypeFilter() { return document.getElementById('type-filter').value; }
     function getRarityFilter() { return document.getElementById('rarity-filter').value; }
     function getMetaFilter() { return document.getElementById('meta-filter').value; }
+    function getBookFrequencyFilter() { return document.getElementById('book-frequency-filter').value; }
     function getSort() { return document.getElementById('sort-select').value; }
     function getSearch() { return normalizeText(document.getElementById('search-input').value.trim()); }
 
@@ -731,6 +751,7 @@
           type: getTypeFilter(),
           rarity: getRarityFilter(),
           meta: getMetaFilter(),
+          bookFrequency: getBookFrequencyFilter(),
           sort: getSort(),
           search: document.getElementById('search-input').value
         }));
@@ -744,6 +765,7 @@
         if (saved.type !== undefined) document.getElementById('type-filter').value = saved.type;
         if (saved.rarity !== undefined) document.getElementById('rarity-filter').value = saved.rarity;
         if (saved.meta !== undefined) document.getElementById('meta-filter').value = saved.meta;
+        if (saved.bookFrequency !== undefined) document.getElementById('book-frequency-filter').value = saved.bookFrequency;
         if (saved.sort !== undefined) document.getElementById('sort-select').value = saved.sort;
         if (saved.search !== undefined) document.getElementById('search-input').value = saved.search;
       } catch {}
@@ -754,10 +776,12 @@
       const typeFilter = getTypeFilter();
       const rarityFilter = getRarityFilter();
       const metaFilter = getMetaFilter();
+      const bookFrequencyFilter = getBookFrequencyFilter();
       const search = getSearch();
       const filtered = allWords.filter(w => {
         const wordType = getWordType(w.word);
         const rarity = getRarityBucket(w.frequency);
+        const bookFrequencyBucket = getBookFrequencyBucket(w.book_frequency);
         if (filter && w.book_title !== filter) return false;
         if (typeFilter && wordType !== typeFilter) return false;
         if (rarityFilter && rarity !== rarityFilter) return false;
@@ -765,6 +789,7 @@
         if (metaFilter === 'no-sentence' && w.sentence) return false;
         if (metaFilter === 'has-chapter' && !w.chapter_title) return false;
         if (metaFilter === 'no-chapter' && w.chapter_title) return false;
+        if (bookFrequencyFilter && bookFrequencyBucket !== bookFrequencyFilter) return false;
         if (search) {
           return normalizeText(w.word).includes(search)
             || normalizeText(w.translation).includes(search)
@@ -789,6 +814,8 @@
         const dateB = new Date(b.created_at || 0).getTime();
         const rarityA = a.frequency ?? -Infinity;
         const rarityB = b.frequency ?? -Infinity;
+        const bookFrequencyA = a.book_frequency ?? -1;
+        const bookFrequencyB = b.book_frequency ?? -1;
         const lenA = (a.word || '').length;
         const lenB = (b.word || '').length;
 
@@ -802,6 +829,8 @@
           case 'chapter-az': return chapterA.localeCompare(chapterB) || wordA.localeCompare(wordB);
           case 'rarity-common-first': return rarityB - rarityA || wordA.localeCompare(wordB);
           case 'rarity-rare-first': return rarityA - rarityB || wordA.localeCompare(wordB);
+          case 'book-frequency-high': return bookFrequencyB - bookFrequencyA || wordA.localeCompare(wordB);
+          case 'book-frequency-low': return bookFrequencyA - bookFrequencyB || wordA.localeCompare(wordB);
           case 'shortest': return lenA - lenB || wordA.localeCompare(wordB);
           case 'longest': return lenB - lenA || wordA.localeCompare(wordB);
           case 'newest':
@@ -845,6 +874,7 @@
     document.getElementById('type-filter').addEventListener('change', rebuildView);
     document.getElementById('rarity-filter').addEventListener('change', rebuildView);
     document.getElementById('meta-filter').addEventListener('change', rebuildView);
+    document.getElementById('book-frequency-filter').addEventListener('change', rebuildView);
     document.getElementById('sort-select').addEventListener('change', rebuildView);
     document.getElementById('search-input').addEventListener('input', () => {
       if (currentView === 'list') renderList();
@@ -855,6 +885,7 @@
       document.getElementById('type-filter').value = '';
       document.getElementById('rarity-filter').value = '';
       document.getElementById('meta-filter').value = '';
+      document.getElementById('book-frequency-filter').value = '';
       document.getElementById('sort-select').value = 'newest';
       document.getElementById('search-input').value = '';
       rebuildView();
@@ -1045,6 +1076,7 @@
               <div class="wi-meta">
                 ${w.book_title ? `<span class="wi-meta-item">📚 ${escHtml(w.book_title)}</span>` : ''}
                 ${w.chapter_title ? `<span class="wi-meta-item">· ${escHtml(w.chapter_title)}</span>` : ''}
+                ${w.book_frequency !== null && w.book_frequency !== undefined ? `<span class="wi-meta-item">· In book: ${w.book_frequency}x</span>` : ''}
                 ${date ? `<span class="wi-meta-item">· ${date}</span>` : ''}
               </div>
             </div>

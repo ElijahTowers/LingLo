@@ -1,5 +1,5 @@
 require('dotenv').config();
-const APP_VERSION = 'v4.84';
+const APP_VERSION = 'v4.85';
 const express = require('express');
 const crypto = require('crypto');
 const multer = require('multer');
@@ -679,6 +679,27 @@ function countPhraseOccurrences(normalizedText, normalizedPhrase) {
   const escaped = normalizedPhrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const matches = normalizedText.match(new RegExp(`(^| )${escaped}(?= |$)`, 'g'));
   return matches ? matches.length : 0;
+}
+
+function getBookOccurrenceCount(bookId, text) {
+  const tokens = tokenizeSpanishWords(String(text || '').trim());
+  if (!bookId || !tokens.length) return 0;
+  if (tokens.length > 1) {
+    const normalizedPhrase = normalizeTextForPhraseSearch(text);
+    const chapters = db.prepare(
+      'SELECT normalized_text FROM book_chapter_cache WHERE book_id = ? ORDER BY chapter_index'
+    ).all(bookId);
+    return chapters.reduce((sum, chapter) => sum + countPhraseOccurrences(chapter.normalized_text, normalizedPhrase), 0);
+  }
+  const surfaceKey = canonicalizeSpanishToken(tokens[0]);
+  const lemmaKey = lemmaKeyForToken(tokens[0]);
+  const exactRow = db.prepare(
+    'SELECT count FROM book_surface_counts WHERE book_id = ? AND surface_key = ?'
+  ).get(bookId, surfaceKey);
+  const lemmaRow = db.prepare(
+    'SELECT count FROM book_lemma_counts WHERE book_id = ? AND lemma_key = ?'
+  ).get(bookId, lemmaKey);
+  return lemmaRow?.count || exactRow?.count || 0;
 }
 
 async function getChapterHtml(epub, chapterId) {
@@ -1384,6 +1405,14 @@ app.get('/api/words', async (req, res) => {
     FROM words w LEFT JOIN books b ON w.book_id = b.id
     ORDER BY w.created_at DESC
   `).all();
+  const analyzedBooks = new Set(
+    db.prepare('SELECT book_id FROM book_analysis WHERE version = ?').all(BOOK_ANALYSIS_VERSION).map(row => row.book_id)
+  );
+  words.forEach(w => {
+    w.book_frequency = w.book_id && analyzedBooks.has(w.book_id)
+      ? getBookOccurrenceCount(w.book_id, w.word)
+      : null;
+  });
   if (words.length > 0) {
     try {
       const freqs = await callWordfreq(words.map(w => w.word));
