@@ -1,5 +1,5 @@
 require('dotenv').config();
-const APP_VERSION = 'v4.79';
+const APP_VERSION = 'v4.80';
 const express = require('express');
 const crypto = require('crypto');
 const multer = require('multer');
@@ -616,6 +616,15 @@ function tokenizeSpanishWords(text) {
   return (text.match(/[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+/g) || []);
 }
 
+function tokenizeSearchableText(text) {
+  return [...text.matchAll(/[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+/g)].map(match => ({
+    raw: match[0],
+    value: normalizeSpanishLetters(match[0]),
+    start: match.index,
+    end: match.index + match[0].length
+  }));
+}
+
 function normalizeTextForPhraseSearch(text) {
   return normalizeSpanishLetters(text)
     .replace(/[^a-zñ]+/g, ' ')
@@ -918,7 +927,8 @@ app.get('/api/books/:id/chapter/:index', async (req, res) => {
 app.get('/api/books/:id/search', async (req, res) => {
   try {
     const q = (req.query.q || '').trim().toLowerCase();
-    if (!q || q.length < 2) return res.json([]);
+    const queryWords = normalizeTextForPhraseSearch(q).split(/\s+/).filter(Boolean);
+    if (!queryWords.length || queryWords.join(' ').length < 2) return res.json([]);
 
     const book = db.prepare('SELECT * FROM books WHERE id = ?').get(req.params.id);
     if (!book) return res.status(404).json({ error: 'Book not found' });
@@ -940,15 +950,20 @@ app.get('/api/books/:id/search', async (req, res) => {
       }
 
       const rawText = chapterHtmlToText(html);
-      const qNorm = normalizeSpanishLetters(q.normalize('NFC'));
-      const textLower = normalizeSpanishLetters(rawText);
+      const tokens = tokenizeSearchableText(rawText);
 
-      let matchIdx = textLower.indexOf(qNorm);
-      while (matchIdx !== -1) {
-        // Extract ~40 chars of context around the match
-        const start = Math.max(0, matchIdx - 40);
-        const end = Math.min(rawText.length, matchIdx + q.length + 40);
+      for (let tokenIndex = 0; tokenIndex <= tokens.length - queryWords.length; tokenIndex++) {
+        let matches = true;
+        for (let offset = 0; offset < queryWords.length; offset++) {
+          if (tokens[tokenIndex + offset].value !== queryWords[offset]) {
+            matches = false;
+            break;
+          }
+        }
+        if (!matches) continue;
 
+        const start = Math.max(0, tokens[tokenIndex].start - 40);
+        const end = Math.min(rawText.length, tokens[tokenIndex + queryWords.length - 1].end + 40);
         let snippet = rawText.substring(start, end).trim();
         if (start > 0) snippet = '...' + snippet;
         if (end < rawText.length) snippet = snippet + '...';
@@ -957,11 +972,10 @@ app.get('/api/books/:id/search', async (req, res) => {
           chapterIndex: i,
           chapterTitle: chapter.title || `Chapter ${i + 1}`,
           snippet,
-          match: rawText.substring(matchIdx, matchIdx + q.length)
+          match: rawText.substring(tokens[tokenIndex].start, tokens[tokenIndex + queryWords.length - 1].end)
         });
 
-        matchIdx = textLower.indexOf(qNorm, matchIdx + 1);
-        if (results.length > 500) break; // hard limit to prevent crazy big responses
+        if (results.length > 500) break;
       }
       if (results.length > 500) break;
     }
