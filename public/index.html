@@ -85,6 +85,86 @@
     .streak-popover.visible { display: block; }
     .streak-popover strong { display: block; font-size: 0.86rem; margin-bottom: 2px; }
     .streak-anchor { position: relative; display: flex; align-items: center; }
+    .milestones-widget {
+      margin-bottom: 28px;
+      padding: 18px 20px;
+      border-radius: var(--radius);
+      background: var(--surface);
+      border: 1px solid var(--border-strong);
+      display: none;
+    }
+    .milestones-widget.visible { display: block; }
+    .milestones-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+    .milestones-title {
+      font-size: 0.98rem;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .milestones-meta {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      text-align: right;
+    }
+    .milestone-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+    }
+    .milestone-card {
+      padding: 14px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.03);
+    }
+    .milestone-card.complete {
+      border-color: rgba(52,211,153,0.28);
+      background: rgba(52,211,153,0.08);
+    }
+    .milestone-status {
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+    .milestone-card.complete .milestone-status { color: #34d399; }
+    .milestone-label {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--text);
+      line-height: 1.3;
+    }
+    .milestone-detail {
+      margin-top: 6px;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      line-height: 1.45;
+      min-height: 2.3em;
+    }
+    .milestone-progress {
+      margin-top: 12px;
+      height: 7px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.08);
+      overflow: hidden;
+    }
+    .milestone-progress-fill {
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--purple), #d4874a);
+    }
+    .milestone-foot {
+      margin-top: 8px;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+    }
     .continue-reading {
       display: none;
       align-items: center;
@@ -158,6 +238,9 @@
     @media (max-width: 540px) {
       .streak-widget { gap: 14px; padding: 14px 16px; margin-bottom: 20px; }
       .streak-count { font-size: 1.2rem; }
+      .milestones-widget { padding: 16px; margin-bottom: 20px; }
+      .milestones-head { flex-direction: column; align-items: flex-start; margin-bottom: 12px; }
+      .milestones-meta { text-align: left; }
       .continue-reading {
         flex-direction: column;
         align-items: flex-start;
@@ -216,6 +299,7 @@
     </a>
 
     <div class="streak-widget" id="streak-widget"></div>
+    <section class="milestones-widget" id="milestones-widget"></section>
 
     <div class="upload-area" id="upload-area">
       <div class="upload-icon">📚</div>
@@ -407,6 +491,69 @@
       </svg>`;
     }
 
+    const milestoneDefinitions = [
+      { id: 'saved-10', metric: 'totalSavedWords', target: 10, label: 'Save 10 words', detail: 'Build your first useful review set.' },
+      { id: 'saved-50', metric: 'totalSavedWords', target: 50, label: 'Save 50 words', detail: 'Your word list starts to get real range.' },
+      { id: 'read-5000', metric: 'totalWordsRead', target: 5000, label: 'Read 5,000 words', detail: 'Enough exposure to feel momentum.' },
+      { id: 'read-25000', metric: 'totalWordsRead', target: 25000, label: 'Read 25,000 words', detail: 'A serious base of Spanish reading input.' },
+      { id: 'streak-7', metric: 'longestStreak', target: 7, label: 'Hit a 7-day streak', detail: 'Turn reading into a habit.' },
+      { id: 'streak-30', metric: 'longestStreak', target: 30, label: 'Hit a 30-day streak', detail: 'Stay consistent for a full month.' }
+    ];
+
+    function milestoneValueLabel(metric, value) {
+      if (metric === 'totalWordsRead') return `${value.toLocaleString()} words`;
+      if (metric === 'longestStreak') return `${value} days`;
+      return `${value} saved`;
+    }
+
+    function renderMilestones(stats) {
+      const el = document.getElementById('milestones-widget');
+      if (!el) return;
+      const milestones = milestoneDefinitions.map(item => {
+        const value = stats[item.metric] || 0;
+        const pct = Math.min(100, Math.round((value / item.target) * 100));
+        return {
+          ...item,
+          value,
+          pct,
+          achieved: value >= item.target
+        };
+      });
+      const unlocked = milestones.filter(item => item.achieved).length;
+      const nextMilestone = milestones
+        .filter(item => !item.achieved)
+        .sort((a, b) => (b.pct - a.pct) || (a.target - b.target))[0];
+
+      el.innerHTML = `
+        <div class="milestones-head">
+          <div class="milestones-title">Milestones</div>
+          <div class="milestones-meta">${unlocked} unlocked${nextMilestone ? ` · Next up: ${nextMilestone.label}` : ' · All current milestones unlocked'}</div>
+        </div>
+        <div class="milestone-grid">
+          ${milestones.map(item => `
+            <div class="milestone-card ${item.achieved ? 'complete' : ''}">
+              <div class="milestone-status">${item.achieved ? 'Unlocked' : 'In progress'}</div>
+              <div class="milestone-label">${item.label}</div>
+              <div class="milestone-detail">${item.detail}</div>
+              <div class="milestone-progress">
+                <div class="milestone-progress-fill" style="width:${item.pct}%"></div>
+              </div>
+              <div class="milestone-foot">${milestoneValueLabel(item.metric, item.value)} / ${milestoneValueLabel(item.metric, item.target)}</div>
+            </div>
+          `).join('')}
+        </div>
+      `;
+      el.classList.add('visible');
+    }
+
+    async function loadMotivation() {
+      try {
+        const res = await fetch('/api/motivation');
+        if (!res.ok) throw new Error();
+        renderMilestones(await res.json());
+      } catch {}
+    }
+
     async function renderStreak() {
       let streak = 0;
       let dailyWords = 0;
@@ -448,6 +595,7 @@
     loadBooks();
     loadWordCount();
     renderStreak();
+    loadMotivation();
   </script>
 </body>
 </html>

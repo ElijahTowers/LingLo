@@ -328,6 +328,27 @@
       color: var(--purple);
       font-weight: 600;
     }
+    .reencounter-note {
+      display: none;
+      margin-top: 10px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: rgba(167,139,250,0.08);
+      border: 1px solid rgba(167,139,250,0.24);
+      font-size: 0.82rem;
+      line-height: 1.5;
+      color: var(--text);
+    }
+    .reencounter-note.visible { display: block; }
+    .reencounter-note strong {
+      display: block;
+      margin-bottom: 3px;
+      color: var(--purple);
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
     .translate-label {
       margin-top: 10px;
       font-size: 0.68rem;
@@ -1060,6 +1081,7 @@
             <div class="book-frequency-count" id="book-frequency-count"></div>
             <div class="book-frequency-note" id="book-frequency-note"></div>
           </div>
+          <div class="reencounter-note" id="reencounter-note"></div>
           <div class="translate-label">Meaning Here</div>
           <div class="sidebar-translation" id="sidebar-translation"></div>
           <div class="regional-usage" id="regional-usage"></div>
@@ -1128,6 +1150,6 @@
       <button class="popup-btn primary" id="popup-more-btn">Details →</button>
     </div>
   </div>
-  <script src="reader.js?v=4.86"></script>
+  <script src="reader.js?v=4.87"></script>
 </body>
 </html>

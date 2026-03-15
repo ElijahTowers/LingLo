@@ -1,5 +1,5 @@
 require('dotenv').config();
-const APP_VERSION = 'v4.86';
+const APP_VERSION = 'v4.87';
 const express = require('express');
 const crypto = require('crypto');
 const multer = require('multer');
@@ -645,19 +645,38 @@ function addDays(dateString, days) {
   return localDateString(date);
 }
 
+function getQualifyingStreakDates(goal) {
+  return db.prepare(
+    `SELECT read_date
+     FROM reading_pages
+     GROUP BY read_date
+     HAVING SUM(words_read) >= ?
+     ORDER BY read_date ASC`
+  ).all(goal).map(row => row.read_date);
+}
+
+function computeLongestStreak(qualifyingDates) {
+  if (!qualifyingDates.length) return 0;
+  let longest = 1;
+  let current = 1;
+  for (let i = 1; i < qualifyingDates.length; i++) {
+    if (addDays(qualifyingDates[i - 1], 1) === qualifyingDates[i]) {
+      current++;
+      if (current > longest) longest = current;
+    } else {
+      current = 1;
+    }
+  }
+  return longest;
+}
+
 function computeServerStreakStats() {
   const goal = 500;
   const today = localDateString();
   const dailyWords = db.prepare(
     'SELECT COALESCE(SUM(words_read), 0) AS total FROM reading_pages WHERE read_date = ?'
   ).get(today).total || 0;
-  const qualifyingDates = db.prepare(
-    `SELECT read_date
-     FROM reading_pages
-     GROUP BY read_date
-     HAVING SUM(words_read) >= ?
-     ORDER BY read_date DESC`
-  ).all(goal).map(row => row.read_date);
+  const qualifyingDates = getQualifyingStreakDates(goal);
   const qualifying = new Set(qualifyingDates);
   const yesterday = addDays(today, -1);
   let streak = 0;
@@ -671,6 +690,26 @@ function computeServerStreakStats() {
     streak,
     goal,
     goalMet: dailyWords >= goal
+  };
+}
+
+function computeMotivationStats() {
+  const streakStats = computeServerStreakStats();
+  const totalWordsRead = db.prepare(
+    'SELECT COALESCE(SUM(words_read), 0) AS total FROM reading_pages'
+  ).get().total || 0;
+  const totalSavedWords = db.prepare(
+    'SELECT COUNT(*) AS total FROM words'
+  ).get().total || 0;
+  const totalBooksStarted = db.prepare(
+    'SELECT COUNT(DISTINCT book_id) AS total FROM reading_pages WHERE book_id IS NOT NULL'
+  ).get().total || 0;
+  return {
+    ...streakStats,
+    totalWordsRead,
+    totalSavedWords,
+    totalBooksStarted,
+    longestStreak: computeLongestStreak(getQualifyingStreakDates(streakStats.goal))
   };
 }
 
@@ -850,6 +889,10 @@ app.get('/api/version', (req, res) => res.json({ version: APP_VERSION }));
 
 app.get('/api/streak', (req, res) => {
   res.json(computeServerStreakStats());
+});
+
+app.get('/api/motivation', (req, res) => {
+  res.json(computeMotivationStats());
 });
 
 app.post('/api/reading-event', (req, res) => {

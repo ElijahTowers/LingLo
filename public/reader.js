@@ -34,6 +34,7 @@ const frequencyCache = new Map();
 const regionalUsageCache = new Map();
 let activeFrequencyRequest = '';
 let readerStreakPopoverBound = false;
+let activeFrequencyResult = null;
 async function fetchRarity(words) {
   const needed = words.filter(w => !rarityCache.has(w));
   if (needed.length > 0) {
@@ -78,6 +79,8 @@ function resetBookFrequency() {
   popup.classList.remove('visible');
   popupCount.textContent = '';
   popupNote.textContent = '';
+  activeFrequencyResult = null;
+  updateReencounterNote();
 }
 
 function renderBookFrequency(result) {
@@ -92,6 +95,7 @@ function renderBookFrequency(result) {
     ? `${getLearningValueLabel(result.count, true)}. Exact phrase match.`
     : `${getLearningValueLabel(result.count, false)}. Grouped across singular/plural and related forms.`;
   const freshNote = result.freshlyAnalyzed ? ' This book was analyzed just now.' : '';
+  activeFrequencyResult = result;
 
   panel.classList.add('visible');
   panelCount.textContent = label;
@@ -103,6 +107,7 @@ function renderBookFrequency(result) {
   popupNote.textContent = (result.type === 'phrase'
     ? 'Exact phrase match in this book.'
     : 'Grouped singular/plural and related forms.') + (result.freshlyAnalyzed ? ' Analyzed just now.' : '');
+  updateReencounterNote();
   scheduleTranslateScrollHintUpdate();
 }
 
@@ -122,6 +127,34 @@ function showBookFrequencyLoading() {
   popup.classList.add('visible');
   popupCount.textContent = 'Analyzing this book...';
   popupNote.textContent = 'Book frequency is being prepared.';
+  activeFrequencyResult = null;
+  updateReencounterNote();
+}
+
+function updateReencounterNote() {
+  const note = document.getElementById('reencounter-note');
+  if (!note) return;
+  const savedEntry = currentWord ? savedWords.get(currentWord.toLowerCase()) : null;
+  if (!savedEntry || !activeFrequencyResult || activeFrequencyResult.count <= 0) {
+    note.textContent = '';
+    note.classList.remove('visible');
+    return;
+  }
+
+  const count = activeFrequencyResult.count;
+  let body = '';
+  if (count >= 12) {
+    body = `You saved this ${activeFrequencyResult.type} and it keeps coming back here: ${count} times in this book. Strong review candidate.`;
+  } else if (count >= 5) {
+    body = `You saved this ${activeFrequencyResult.type} and you have already run into it ${count} times in this book. Nice one to keep noticing in context.`;
+  } else if (count >= 2) {
+    body = `You saved this ${activeFrequencyResult.type} and it has already reappeared ${count} times in this book. Keep an eye on it while you read.`;
+  } else {
+    body = `You saved this ${activeFrequencyResult.type}. It has only shown up once so far in this book, so keep it on your radar.`;
+  }
+  note.innerHTML = `<strong>Saved Re-encounter</strong>${escapeHtml(body)}`;
+  note.classList.add('visible');
+  scheduleTranslateScrollHintUpdate();
 }
 
 async function loadBookFrequency(text) {
@@ -888,6 +921,7 @@ function clearWordView() {
   document.getElementById('sentence-translation').classList.remove('visible');
   document.getElementById('alt-meanings').innerHTML = '';
   document.getElementById('alt-meanings-wrap').classList.remove('visible');
+  updateReencounterNote();
   if (activeWordEl) { activeWordEl.classList.remove('active'); activeWordEl = null; }
   clearDragSel();
   currentWord = '';
@@ -907,6 +941,7 @@ function updateSaveBtn(word) {
     btn.className = '';
     btn.title = `Save ${itemLabel}`;
   }
+  updateReencounterNote();
 }
 
 async function loadAlternativeMeanings(text, sentence, primaryMeaning) {
@@ -948,6 +983,7 @@ async function removeSavedWord(id, word) {
   });
   if (currentWord && currentWord.toLowerCase() === word.toLowerCase()) updateSaveBtn(currentWord);
   updateWordsTabCount();
+  updateReencounterNote();
 }
 
 // ── Save / remove word ──
@@ -977,6 +1013,7 @@ document.getElementById('save-btn').addEventListener('click', async () => {
   if (activeWordEl) activeWordEl.classList.add('saved');
   updateSaveBtn(currentWord);
   updateWordsTabCount();
+  updateReencounterNote();
 });
 
 // ── Explain ──
