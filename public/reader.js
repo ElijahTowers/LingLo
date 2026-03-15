@@ -1332,9 +1332,24 @@ document.addEventListener('click', e => {
 });
 
 // ── Search ──
+function updateSearchLayoutOffset() {
+  const offset = document.body.classList.contains('search-open')
+    ? `${document.getElementById('search-bar').offsetHeight || 0}px`
+    : '0px';
+  document.documentElement.style.setProperty('--search-offset', offset);
+}
+
+function repaginateForSearchBar(keepSummary = true) {
+  if (!chapters.length || fixtureMode) return;
+  const ratio = totalPages > 1 ? currentPage / (totalPages - 1) : 0;
+  requestAnimationFrame(() => setupPagination(ratio, keepSummary));
+}
+
 function openSearch() {
   document.getElementById('search-bar').classList.add('visible');
   document.body.classList.add('search-open');
+  updateSearchLayoutOffset();
+  repaginateForSearchBar();
   const input = document.getElementById('search-input');
   requestAnimationFrame(() => {
     input.focus();
@@ -1345,6 +1360,8 @@ function openSearch() {
 function closeSearch() {
   document.getElementById('search-bar').classList.remove('visible');
   document.body.classList.remove('search-open');
+  updateSearchLayoutOffset();
+  repaginateForSearchBar();
   clearSearchHighlights();
   searchMatches = [];
   searchCurrent = -1;
@@ -1485,6 +1502,10 @@ document.getElementById('search-input').addEventListener('keydown', e => {
     else goToSearchMatch(searchCurrent + (e.shiftKey ? -1 : 1));
   }
   if (e.key === 'Escape') closeSearch();
+});
+window.addEventListener('resize', () => {
+  if (!document.body.classList.contains('search-open')) return;
+  updateSearchLayoutOffset();
 });
 
 // ── Reading stats ──

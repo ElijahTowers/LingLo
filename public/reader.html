@@ -97,6 +97,7 @@
       display: flex;
       overflow: hidden;
       min-height: 0;
+      padding-top: var(--search-offset, 0px);
     }
 
     /* ── Text column ── */
@@ -513,7 +514,6 @@
     #search-close:hover { color: var(--text); }
     #content .word.search-match { background: rgba(250, 204, 21, 0.18); }
     #content .word.search-current { background: rgba(250, 204, 21, 0.5) !important; color: #1a1400; }
-    body.search-open .text-column { padding-top: 48px; }
     @media (max-width: 640px) {
       .search-bar {
         top: 52px;
@@ -539,7 +539,6 @@
         min-width: 34px;
         min-height: 34px;
       }
-      body.search-open .text-column { padding-top: 88px; }
     }
 
     /* ── Stats panel ── */
@@ -1090,6 +1089,6 @@
       <button class="popup-btn primary" id="popup-more-btn">Details →</button>
     </div>
   </div>
-  <script src="reader.js?v=4.79"></script>
+  <script src="reader.js?v=4.81"></script>
 </body>
 </html>
