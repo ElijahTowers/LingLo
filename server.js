@@ -1,5 +1,5 @@
 require('dotenv').config();
-const APP_VERSION = 'v4.76';
+const APP_VERSION = 'v4.77';
 const express = require('express');
 const crypto = require('crypto');
 const multer = require('multer');
@@ -71,8 +71,19 @@ db.exec(`
     PRIMARY KEY (book_id, chapter_index),
     FOREIGN KEY (book_id) REFERENCES books(id)
   );
+  CREATE TABLE IF NOT EXISTS reading_pages (
+    read_date TEXT NOT NULL,
+    book_id INTEGER NOT NULL,
+    chapter_index INTEGER NOT NULL,
+    page_number INTEGER NOT NULL,
+    words_read INTEGER NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (read_date, book_id, chapter_index, page_number),
+    FOREIGN KEY (book_id) REFERENCES books(id)
+  );
   CREATE INDEX IF NOT EXISTS idx_book_lemma_counts_book_id ON book_lemma_counts(book_id);
   CREATE INDEX IF NOT EXISTS idx_book_surface_counts_book_id ON book_surface_counts(book_id);
+  CREATE INDEX IF NOT EXISTS idx_reading_pages_read_date ON reading_pages(read_date);
 `);
 
 // ── Auth ──
@@ -612,6 +623,48 @@ function normalizeTextForPhraseSearch(text) {
     .replace(/\s+/g, ' ');
 }
 
+function localDateString(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function addDays(dateString, days) {
+  const date = new Date(`${dateString}T12:00:00`);
+  date.setDate(date.getDate() + days);
+  return localDateString(date);
+}
+
+function computeServerStreakStats() {
+  const goal = 500;
+  const today = localDateString();
+  const dailyWords = db.prepare(
+    'SELECT COALESCE(SUM(words_read), 0) AS total FROM reading_pages WHERE read_date = ?'
+  ).get(today).total || 0;
+  const qualifyingDates = db.prepare(
+    `SELECT read_date
+     FROM reading_pages
+     GROUP BY read_date
+     HAVING SUM(words_read) >= ?
+     ORDER BY read_date DESC`
+  ).all(goal).map(row => row.read_date);
+  const qualifying = new Set(qualifyingDates);
+  const yesterday = addDays(today, -1);
+  let streak = 0;
+  let cursor = qualifying.has(today) ? today : (qualifying.has(yesterday) ? yesterday : null);
+  while (cursor && qualifying.has(cursor)) {
+    streak++;
+    cursor = addDays(cursor, -1);
+  }
+  return {
+    dailyWords,
+    streak,
+    goal,
+    goalMet: dailyWords >= goal
+  };
+}
+
 function countPhraseOccurrences(normalizedText, normalizedPhrase) {
   if (!normalizedText || !normalizedPhrase) return 0;
   const escaped = normalizedPhrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -764,6 +817,32 @@ async function autoImport() {
 // --- Routes ---
 
 app.get('/api/version', (req, res) => res.json({ version: APP_VERSION }));
+
+app.get('/api/streak', (req, res) => {
+  res.json(computeServerStreakStats());
+});
+
+app.post('/api/reading-event', (req, res) => {
+  const bookId = parseInt(req.body.bookId, 10);
+  const chapterIndex = parseInt(req.body.chapterIndex, 10);
+  const pageNumber = parseInt(req.body.pageNumber, 10);
+  const wordsRead = Math.max(0, Math.min(2000, parseInt(req.body.wordsRead, 10) || 0));
+  if (!bookId || isNaN(chapterIndex) || chapterIndex < 0 || isNaN(pageNumber) || pageNumber < 0 || wordsRead <= 0) {
+    return res.status(400).json({ error: 'Invalid reading event' });
+  }
+
+  const book = db.prepare('SELECT id FROM books WHERE id = ?').get(bookId);
+  if (!book) return res.status(404).json({ error: 'Book not found' });
+
+  const today = localDateString();
+  db.prepare(
+    `INSERT OR IGNORE INTO reading_pages
+     (read_date, book_id, chapter_index, page_number, words_read)
+     VALUES (?, ?, ?, ?, ?)`
+  ).run(today, bookId, chapterIndex, pageNumber, wordsRead);
+
+  res.json(computeServerStreakStats());
+});
 
 app.get('/api/books', (req, res) => {
   res.json(db.prepare('SELECT * FROM books ORDER BY title COLLATE NOCASE ASC').all());

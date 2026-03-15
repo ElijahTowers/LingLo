@@ -385,15 +385,18 @@
       </svg>`;
     }
 
-    function renderStreak() {
-      const today = new Date().toISOString().split('T')[0];
-      const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
-      const yStr = yesterday.toISOString().split('T')[0];
-      const last = localStorage.getItem('linglo-streak-last');
-      const streak = (last === today || last === yStr) ? parseInt(localStorage.getItem('linglo-streak-count') || '0') : 0;
-      const dailyWords = localStorage.getItem('linglo-daily-date') === today
-        ? parseInt(localStorage.getItem('linglo-daily-words') || '0') : 0;
-      const goal = 500;
+    async function renderStreak() {
+      let streak = 0;
+      let dailyWords = 0;
+      let goal = 500;
+      try {
+        const res = await fetch('/api/streak');
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        streak = data.streak || 0;
+        dailyWords = data.dailyWords || 0;
+        goal = data.goal || 500;
+      } catch {}
       const goalMet = dailyWords >= goal;
       const pct = Math.min(100, Math.round(dailyWords / goal * 100));
       const streakMsg = streak >= 30 ? 'Legendary! 🏆' : streak >= 14 ? 'Unstoppable! 🚀' : streak >= 7 ? 'On fire! 🎉' : streak >= 3 ? 'Keep it up!' : streak === 1 ? 'Good start!' : 'Read 500 words to start your streak';

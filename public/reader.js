@@ -238,6 +238,7 @@ window.addEventListener('beforeunload', onPageLeave);
 // ── Init ──
 async function init() {
   renderReaderStreakCircle();
+  refreshStreakStats();
   if (fixtureMode) {
     renderLayoutFixture();
     return;
@@ -1464,43 +1465,42 @@ document.getElementById('search-input').addEventListener('keydown', e => {
 });
 
 // ── Reading stats ──
-function todayStr() {
-  return new Date().toISOString().split('T')[0];
+let streakStats = { dailyWords: 0, streak: 0, goal: 500, goalMet: false };
+
+async function refreshStreakStats() {
+  try {
+    const res = await fetch('/api/streak');
+    if (!res.ok) throw new Error();
+    streakStats = await res.json();
+    renderReaderStreakCircle();
+  } catch {}
 }
 
-function logWordsRead(count) {
-  const today = todayStr();
-  const storedDate = localStorage.getItem('linglo-daily-date');
-  let dailyWords = storedDate === today ? parseInt(localStorage.getItem('linglo-daily-words') || '0') : 0;
-  const wasGoalMet = dailyWords >= 500;
-  dailyWords += count;
-  localStorage.setItem('linglo-daily-date', today);
-  localStorage.setItem('linglo-daily-words', String(dailyWords));
-  if (!wasGoalMet && dailyWords >= 500) {
-    const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
-    const yStr = yesterday.toISOString().split('T')[0];
-    const last = localStorage.getItem('linglo-streak-last');
-    if (last !== today) {
-      let streak = parseInt(localStorage.getItem('linglo-streak-count') || '0');
-      streak = (last === yStr) ? streak + 1 : 1;
-      localStorage.setItem('linglo-streak-last', today);
-      localStorage.setItem('linglo-streak-count', String(streak));
-    }
-  }
+async function logWordsRead(count, chapterIndex, pageNumber) {
+  try {
+    const res = await fetch('/api/reading-event', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        bookId: parseInt(bookId, 10),
+        chapterIndex,
+        pageNumber,
+        wordsRead: count
+      })
+    });
+    if (!res.ok) throw new Error();
+    streakStats = await res.json();
+  } catch {}
   renderReaderStreakCircle();
 }
 
 function renderReaderStreakCircle() {
   const el = document.getElementById('reader-streak-circle');
   if (!el) return;
-  const today = todayStr();
-  const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
-  const yStr = yesterday.toISOString().split('T')[0];
-  const last = localStorage.getItem('linglo-streak-last');
-  const streak = (last === today || last === yStr) ? parseInt(localStorage.getItem('linglo-streak-count') || '0') : 0;
-  const dailyWords = localStorage.getItem('linglo-daily-date') === today
-    ? parseInt(localStorage.getItem('linglo-daily-words') || '0') : 0;
-  const pct = Math.min(100, Math.round(dailyWords / 500 * 100));
+  const streak = streakStats.streak || 0;
+  const goal = streakStats.goal || 500;
+  const dailyWords = streakStats.dailyWords || 0;
+  const pct = Math.min(100, Math.round(dailyWords / goal * 100));
   const goalMet = pct >= 100;
   const r = 11, size = 28, circ = +(2 * Math.PI * r).toFixed(2);
   const offset = +(circ * (1 - pct / 100)).toFixed(2);
@@ -1642,7 +1642,7 @@ function goToPage(n, keepSummary = false) {
   if (pageArrivalTime > 0 && wordsPerPage > 0 && !loggedPages.has(currentPage)
       && (now - pageArrivalTime) >= MIN_PAGE_TIME) {
     loggedPages.add(currentPage);
-    logWordsRead(wordsPerPage);
+    logWordsRead(wordsPerPage, currentIndex, currentPage);
   }
   currentPage = n;
   pageArrivalTime = now;
