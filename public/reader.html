@@ -284,6 +284,30 @@
       color: var(--text);
       line-height: 1.2;
     }
+    .book-frequency {
+      display: none;
+      margin-top: 12px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+    }
+    .book-frequency.visible { display: block; }
+    .book-frequency-count {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .book-frequency-note {
+      margin-top: 3px;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      line-height: 1.45;
+    }
+    .book-frequency-note.strong {
+      color: var(--purple);
+      font-weight: 600;
+    }
     .translate-label {
       margin-top: 10px;
       font-size: 0.68rem;
@@ -555,6 +579,26 @@
     }
     #word-popup.visible { display: block; }
     #popup-rarity { margin-bottom: 6px; }
+    #word-popup .popup-frequency {
+      display: none;
+      margin-bottom: 8px;
+      padding: 8px 10px;
+      border-radius: 9px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+    }
+    #word-popup .popup-frequency.visible { display: block; }
+    #word-popup .popup-frequency-count {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+    #word-popup .popup-frequency-note {
+      margin-top: 2px;
+      font-size: 0.74rem;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
     #word-popup .popup-word {
       font-size: 1.05rem;
       font-weight: 700;
@@ -947,6 +991,11 @@
         <div class="word-view" id="word-view" style="display:none">
           <div class="sidebar-word" id="sidebar-word"></div>
           <div id="rarity-badge"></div>
+          <div class="book-frequency" id="book-frequency">
+            <div class="translate-label">Book Frequency</div>
+            <div class="book-frequency-count" id="book-frequency-count"></div>
+            <div class="book-frequency-note" id="book-frequency-note"></div>
+          </div>
           <div class="translate-label">Meaning Here</div>
           <div class="sidebar-translation" id="sidebar-translation"></div>
           <div class="alt-meanings" id="alt-meanings-wrap">
@@ -1003,6 +1052,10 @@
   <div id="word-popup">
     <div class="popup-word" id="popup-word"></div>
     <div id="popup-rarity"></div>
+    <div class="popup-frequency" id="popup-frequency">
+      <div class="popup-frequency-count" id="popup-frequency-count"></div>
+      <div class="popup-frequency-note" id="popup-frequency-note"></div>
+    </div>
     <div class="popup-translation loading" id="popup-translation">Translating…</div>
     <div class="popup-sentence-translation" id="popup-sentence-translation"></div>
     <div class="popup-actions">
@@ -1010,6 +1063,6 @@
       <button class="popup-btn primary" id="popup-more-btn">Details →</button>
     </div>
   </div>
-  <script src="reader.js?v=4.72"></script>
+  <script src="reader.js?v=4.74"></script>
 </body>
 </html>

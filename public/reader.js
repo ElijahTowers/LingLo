@@ -30,6 +30,8 @@ async function fetchSentenceTranslation(word, sentence) {
 
 // ── Rarity helpers ──
 const rarityCache = new Map();
+const frequencyCache = new Map();
+let activeFrequencyRequest = '';
 async function fetchRarity(words) {
   const needed = words.filter(w => !rarityCache.has(w));
   if (needed.length > 0) {
@@ -49,6 +51,113 @@ function rarityBadge(zipf) {
   else if (zipf >= 1) { label = 'Rare';      cls = 'rarity-rare'; }
   else                { label = 'Very rare'; cls = 'rarity-very-rare'; }
   return `<span class="rarity ${cls}">${label}</span>`;
+}
+
+function getLearningValueLabel(count, phrase) {
+  if (count >= (phrase ? 6 : 12)) return 'Worth learning';
+  if (count >= (phrase ? 3 : 5)) return 'Shows up regularly';
+  if (count >= 2) return 'Occasional in this book';
+  if (count === 1) return 'Rare in this book';
+  return 'Not found elsewhere yet';
+}
+
+function resetBookFrequency() {
+  const panel = document.getElementById('book-frequency');
+  const panelCount = document.getElementById('book-frequency-count');
+  const panelNote = document.getElementById('book-frequency-note');
+  const popup = document.getElementById('popup-frequency');
+  const popupCount = document.getElementById('popup-frequency-count');
+  const popupNote = document.getElementById('popup-frequency-note');
+
+  panel.classList.remove('visible');
+  panelCount.textContent = '';
+  panelNote.textContent = '';
+  panelNote.classList.remove('strong');
+  popup.classList.remove('visible');
+  popupCount.textContent = '';
+  popupNote.textContent = '';
+}
+
+function renderBookFrequency(result) {
+  const panel = document.getElementById('book-frequency');
+  const panelCount = document.getElementById('book-frequency-count');
+  const panelNote = document.getElementById('book-frequency-note');
+  const popup = document.getElementById('popup-frequency');
+  const popupCount = document.getElementById('popup-frequency-count');
+  const popupNote = document.getElementById('popup-frequency-note');
+  const label = `In this book: ${result.count}x`;
+  const note = result.type === 'phrase'
+    ? `${getLearningValueLabel(result.count, true)}. Exact phrase match.`
+    : `${getLearningValueLabel(result.count, false)}. Grouped across singular/plural and related forms.`;
+  const freshNote = result.freshlyAnalyzed ? ' This book was analyzed just now.' : '';
+
+  panel.classList.add('visible');
+  panelCount.textContent = label;
+  panelNote.textContent = note + freshNote;
+  panelNote.classList.toggle('strong', result.count >= (result.type === 'phrase' ? 3 : 5));
+
+  popup.classList.add('visible');
+  popupCount.textContent = label;
+  popupNote.textContent = (result.type === 'phrase'
+    ? 'Exact phrase match in this book.'
+    : 'Grouped singular/plural and related forms.') + (result.freshlyAnalyzed ? ' Analyzed just now.' : '');
+  scheduleTranslateScrollHintUpdate();
+}
+
+function showBookFrequencyLoading() {
+  const panel = document.getElementById('book-frequency');
+  const panelCount = document.getElementById('book-frequency-count');
+  const panelNote = document.getElementById('book-frequency-note');
+  const popup = document.getElementById('popup-frequency');
+  const popupCount = document.getElementById('popup-frequency-count');
+  const popupNote = document.getElementById('popup-frequency-note');
+
+  panel.classList.add('visible');
+  panelCount.textContent = 'Analyzing this book...';
+  panelNote.textContent = 'Building frequency data so you can judge whether this is worth learning.';
+  panelNote.classList.remove('strong');
+
+  popup.classList.add('visible');
+  popupCount.textContent = 'Analyzing this book...';
+  popupNote.textContent = 'Book frequency is being prepared.';
+}
+
+async function loadBookFrequency(text) {
+  if (!bookId || !text) return;
+  const key = `${bookId}:${text.trim().toLowerCase()}`;
+  activeFrequencyRequest = key;
+  if (frequencyCache.has(key)) {
+    if (activeFrequencyRequest === key) renderBookFrequency(frequencyCache.get(key));
+    return;
+  }
+
+  showBookFrequencyLoading();
+  try {
+    const res = await fetch(`/api/books/${bookId}/frequency`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text })
+    });
+    if (!res.ok) throw new Error();
+    const result = await res.json();
+    frequencyCache.set(key, result);
+    if (activeFrequencyRequest === key) renderBookFrequency(result);
+  } catch {
+    if (activeFrequencyRequest !== key) return;
+    const panel = document.getElementById('book-frequency');
+    const panelCount = document.getElementById('book-frequency-count');
+    const panelNote = document.getElementById('book-frequency-note');
+    const popup = document.getElementById('popup-frequency');
+    const popupCount = document.getElementById('popup-frequency-count');
+    const popupNote = document.getElementById('popup-frequency-note');
+
+    panel.classList.add('visible');
+    panelCount.textContent = 'Book frequency unavailable';
+    panelNote.textContent = 'Could not analyze this book right now.';
+    popup.classList.add('visible');
+    popupCount.textContent = 'Book frequency unavailable';
+    popupNote.textContent = 'Try again in a moment.';
+  }
 }
 
 let chapters = [];
@@ -656,10 +765,12 @@ function showWordView(word, sentence) {
   document.getElementById('sidebar-empty').style.display = 'none';
   document.getElementById('word-view').style.display = 'flex';
   document.getElementById('sidebar-word').textContent = word;
+  resetBookFrequency();
   document.getElementById('rarity-badge').innerHTML = '';
   fetchRarity([word]).then(([zipf]) => {
     document.getElementById('rarity-badge').innerHTML = rarityBadge(zipf);
   });
+  loadBookFrequency(word);
   document.getElementById('sidebar-translation').textContent = '';
   document.getElementById('sidebar-translation').className = 'sidebar-translation';
   document.getElementById('alt-meanings').innerHTML = '';
@@ -714,6 +825,8 @@ function showWordView(word, sentence) {
 function clearWordView() {
   document.getElementById('sidebar-empty').style.display = '';
   document.getElementById('word-view').style.display = 'none';
+  activeFrequencyRequest = '';
+  resetBookFrequency();
   document.getElementById('rarity-badge').innerHTML = '';
   document.getElementById('explanation').textContent = '';
   document.getElementById('explanation').classList.remove('visible');
@@ -1018,6 +1131,7 @@ function showPopup(word, anchorEl) {
   popupWord.textContent = word;
   popupTranslation.textContent = 'Translating…';
   popupTranslation.className = 'popup-translation loading';
+  resetBookFrequency();
   document.getElementById('popup-rarity').innerHTML = '';
   const pst = document.getElementById('popup-sentence-translation');
   pst.textContent = '';
@@ -1025,6 +1139,7 @@ function showPopup(word, anchorEl) {
   wordPopup.classList.add('visible');
   positionPopup(anchorEl);
   if (isMobile()) _pushOverlayHistory();
+  loadBookFrequency(word).finally(() => positionPopup(anchorEl));
   fetchRarity([word]).then(([zipf]) => {
     document.getElementById('popup-rarity').innerHTML = rarityBadge(zipf);
     positionPopup(anchorEl); // reposition after badge may change popup height
@@ -1045,6 +1160,8 @@ function positionPopup(anchorEl) {
 // skipHistory=true when the caller will handle history (e.g. closeSidebar, popup-more-btn)
 function hidePopup(skipHistory = false) {
   wordPopup.classList.remove('visible');
+  activeFrequencyRequest = '';
+  resetBookFrequency();
   if (!sidebarOpen && !skipHistory) _popOverlayHistory(false);
 }
 

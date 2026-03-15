@@ -1,6 +1,6 @@
 {
   "name": "linglo",
-  "version": "1.0.15",
+  "version": "1.0.16",
   "description": "Spanish reading and vocabulary app",
   "main": "server.js",
   "scripts": {
@@ -17,6 +17,7 @@
     "node-pty": "^1.1.0",
     "otplib": "^13.3.0",
     "qrcode": "^1.5.4",
+    "snowball-stemmers": "^0.6.0",
     "ws": "^8.19.0"
   },
   "devDependencies": {

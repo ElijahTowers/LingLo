@@ -1,5 +1,5 @@
 require('dotenv').config();
-const APP_VERSION = 'v4.73';
+const APP_VERSION = 'v4.74';
 const express = require('express');
 const crypto = require('crypto');
 const multer = require('multer');
@@ -9,9 +9,13 @@ const os = require('os');
 const { spawn } = require('child_process');
 const { EPub } = require('epub2');
 const Database = require('better-sqlite3');
+const { newStemmer } = require('snowball-stemmers');
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3200', 10);
+const BOOK_ANALYSIS_VERSION = 1;
+const spanishStemmer = newStemmer('spanish');
+const analysisPromises = new Map();
 
 for (const dir of ['uploads', 'db', 'public']) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -37,6 +41,38 @@ db.exec(`
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (book_id) REFERENCES books(id)
   );
+  CREATE TABLE IF NOT EXISTS book_analysis (
+    book_id INTEGER PRIMARY KEY,
+    version INTEGER NOT NULL,
+    analyzed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    token_count INTEGER NOT NULL DEFAULT 0,
+    FOREIGN KEY (book_id) REFERENCES books(id)
+  );
+  CREATE TABLE IF NOT EXISTS book_lemma_counts (
+    book_id INTEGER NOT NULL,
+    lemma_key TEXT NOT NULL,
+    count INTEGER NOT NULL,
+    sample TEXT NOT NULL,
+    PRIMARY KEY (book_id, lemma_key),
+    FOREIGN KEY (book_id) REFERENCES books(id)
+  );
+  CREATE TABLE IF NOT EXISTS book_surface_counts (
+    book_id INTEGER NOT NULL,
+    surface_key TEXT NOT NULL,
+    lemma_key TEXT NOT NULL,
+    count INTEGER NOT NULL,
+    PRIMARY KEY (book_id, surface_key),
+    FOREIGN KEY (book_id) REFERENCES books(id)
+  );
+  CREATE TABLE IF NOT EXISTS book_chapter_cache (
+    book_id INTEGER NOT NULL,
+    chapter_index INTEGER NOT NULL,
+    normalized_text TEXT NOT NULL,
+    PRIMARY KEY (book_id, chapter_index),
+    FOREIGN KEY (book_id) REFERENCES books(id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_book_lemma_counts_book_id ON book_lemma_counts(book_id);
+  CREATE INDEX IF NOT EXISTS idx_book_surface_counts_book_id ON book_surface_counts(book_id);
 `);
 
 // ── Auth ──
@@ -443,6 +479,203 @@ function cleanHtml(html) {
   return html.trim();
 }
 
+function decodeHtmlEntities(text) {
+  return text
+    .replace(/&nbsp;|&#160;|&#x00A0;/gi, ' ')
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(parseInt(n, 10)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCharCode(parseInt(n, 16)))
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+}
+
+function chapterHtmlToText(html) {
+  return decodeHtmlEntities(cleanHtml(html).replace(/<[^>]+>/g, ' '))
+    .normalize('NFC')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function normalizeSpanishLetters(text) {
+  return (text || '')
+    .toLowerCase()
+    .replace(/[áàäâ]/g, 'a')
+    .replace(/[éèëê]/g, 'e')
+    .replace(/[íìïî]/g, 'i')
+    .replace(/[óòöô]/g, 'o')
+    .replace(/[úùüû]/g, 'u');
+}
+
+function canonicalizeSpanishToken(text) {
+  return normalizeSpanishLetters(text).replace(/[^a-zñ]/g, '');
+}
+
+function singularizeSpanishToken(token) {
+  if (!token) return '';
+  if (token.endsWith('ces') && token.length > 4) return `${token.slice(0, -3)}z`;
+  if (token.endsWith('es') && token.length > 4) {
+    if (/(iones|adores|adoras|antes|ores|oras|ales|eles|iles|enes|eses)$/.test(token)) {
+      return token.slice(0, -2);
+    }
+  }
+  if (token.endsWith('s') && token.length > 4 && !/(is|us|ss)$/.test(token)) {
+    return token.slice(0, -1);
+  }
+  return token;
+}
+
+function lemmaKeyForToken(text) {
+  const canonical = canonicalizeSpanishToken(text);
+  if (!canonical) return '';
+  const singular = singularizeSpanishToken(canonical);
+  return spanishStemmer.stem(singular) || singular;
+}
+
+function tokenizeSpanishWords(text) {
+  return (text.match(/[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+/g) || []);
+}
+
+function normalizeTextForPhraseSearch(text) {
+  return normalizeSpanishLetters(text)
+    .replace(/[^a-zñ]+/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ');
+}
+
+function countPhraseOccurrences(normalizedText, normalizedPhrase) {
+  if (!normalizedText || !normalizedPhrase) return 0;
+  const escaped = normalizedPhrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const matches = normalizedText.match(new RegExp(`(^| )${escaped}(?= |$)`, 'g'));
+  return matches ? matches.length : 0;
+}
+
+async function getChapterHtml(epub, chapterId) {
+  try {
+    return await epub.getChapterRawAsync(chapterId);
+  } catch {
+    return epub.getChapterAsync(chapterId);
+  }
+}
+
+const clearBookAnalysis = db.transaction((bookId) => {
+  db.prepare('DELETE FROM book_lemma_counts WHERE book_id = ?').run(bookId);
+  db.prepare('DELETE FROM book_surface_counts WHERE book_id = ?').run(bookId);
+  db.prepare('DELETE FROM book_chapter_cache WHERE book_id = ?').run(bookId);
+  db.prepare('DELETE FROM book_analysis WHERE book_id = ?').run(bookId);
+});
+
+const saveBookAnalysis = db.transaction((bookId, tokenCount, lemmaRows, surfaceRows, chapterRows) => {
+  clearBookAnalysis(bookId);
+  const insertLemma = db.prepare(
+    'INSERT INTO book_lemma_counts (book_id, lemma_key, count, sample) VALUES (?, ?, ?, ?)'
+  );
+  const insertSurface = db.prepare(
+    'INSERT INTO book_surface_counts (book_id, surface_key, lemma_key, count) VALUES (?, ?, ?, ?)'
+  );
+  const insertChapter = db.prepare(
+    'INSERT INTO book_chapter_cache (book_id, chapter_index, normalized_text) VALUES (?, ?, ?)'
+  );
+  const insertAnalysis = db.prepare(
+    'INSERT INTO book_analysis (book_id, version, analyzed_at, token_count) VALUES (?, ?, CURRENT_TIMESTAMP, ?)'
+  );
+
+  for (const row of lemmaRows) insertLemma.run(bookId, row.lemmaKey, row.count, row.sample);
+  for (const row of surfaceRows) insertSurface.run(bookId, row.surfaceKey, row.lemmaKey, row.count);
+  for (const row of chapterRows) insertChapter.run(bookId, row.chapterIndex, row.normalizedText);
+  insertAnalysis.run(bookId, BOOK_ANALYSIS_VERSION, tokenCount);
+});
+
+async function analyzeBookFrequency(book) {
+  if (!book) return null;
+  const existing = analysisPromises.get(book.id);
+  if (existing) return existing;
+
+  const job = (async () => {
+    const epub = await getEpub(book.filepath);
+    const chapters = epub.toc.filter(ch => ch.id);
+    const lemmaCounts = new Map();
+    const surfaceCounts = new Map();
+    const chapterRows = [];
+    let tokenCount = 0;
+
+    for (let i = 0; i < chapters.length; i++) {
+      let html;
+      try {
+        html = await getChapterHtml(epub, chapters[i].id);
+      } catch {
+        continue;
+      }
+      const rawText = chapterHtmlToText(html);
+      const normalizedText = normalizeTextForPhraseSearch(rawText);
+      chapterRows.push({ chapterIndex: i, normalizedText });
+
+      for (const token of tokenizeSpanishWords(rawText)) {
+        const surfaceKey = canonicalizeSpanishToken(token);
+        if (!surfaceKey) continue;
+        const lemmaKey = lemmaKeyForToken(token);
+        tokenCount++;
+
+        const lemmaEntry = lemmaCounts.get(lemmaKey) || { count: 0, sample: token };
+        lemmaEntry.count++;
+        if (!lemmaEntry.sample || token.length < lemmaEntry.sample.length) lemmaEntry.sample = token;
+        lemmaCounts.set(lemmaKey, lemmaEntry);
+
+        const surfaceEntry = surfaceCounts.get(surfaceKey) || { count: 0, lemmaKey };
+        surfaceEntry.count++;
+        surfaceCounts.set(surfaceKey, surfaceEntry);
+      }
+    }
+
+    saveBookAnalysis(
+      book.id,
+      tokenCount,
+      [...lemmaCounts.entries()].map(([lemmaKey, value]) => ({ lemmaKey, count: value.count, sample: value.sample })),
+      [...surfaceCounts.entries()].map(([surfaceKey, value]) => ({ surfaceKey, lemmaKey: value.lemmaKey, count: value.count })),
+      chapterRows
+    );
+
+    return {
+      analyzedAt: db.prepare('SELECT analyzed_at FROM book_analysis WHERE book_id = ?').get(book.id)?.analyzed_at || null,
+      tokenCount
+    };
+  })();
+
+  analysisPromises.set(book.id, job);
+  try {
+    return await job;
+  } finally {
+    analysisPromises.delete(book.id);
+  }
+}
+
+async function ensureBookAnalysis(bookId) {
+  const status = db.prepare('SELECT version, analyzed_at, token_count FROM book_analysis WHERE book_id = ?').get(bookId);
+  if (status && status.version === BOOK_ANALYSIS_VERSION) {
+    return { analyzedAt: status.analyzed_at, tokenCount: status.token_count, freshlyAnalyzed: false };
+  }
+  const book = db.prepare('SELECT * FROM books WHERE id = ?').get(bookId);
+  if (!book) return null;
+  const analysis = await analyzeBookFrequency(book);
+  return { ...(analysis || {}), freshlyAnalyzed: true };
+}
+
+async function backfillBookAnalyses() {
+  const books = db.prepare('SELECT id, title, filepath FROM books ORDER BY id').all();
+  const pending = books.filter(book => {
+    const status = db.prepare('SELECT version FROM book_analysis WHERE book_id = ?').get(book.id);
+    return !status || status.version !== BOOK_ANALYSIS_VERSION;
+  });
+  if (!pending.length) return;
+  console.log(`Backfilling book frequency analysis for ${pending.length} book(s)...`);
+  for (const book of pending) {
+    console.log(`Analyzing existing book: "${book.title}"`);
+    await analyzeBookFrequency(book);
+  }
+  console.log('Book frequency backfill complete.');
+}
+
 async function autoImport() {
   const epubs = fs.readdirSync('.').filter(f => f.toLowerCase().endsWith('.epub'));
   for (const file of epubs) {
@@ -476,6 +709,11 @@ app.post('/api/upload', upload.single('epub'), async (req, res) => {
     const result = db.prepare(
       'INSERT INTO books (title, author, filename, filepath) VALUES (?, ?, ?, ?)'
     ).run(title, author, req.file.originalname, req.file.path);
+    analyzeBookFrequency({
+      id: result.lastInsertRowid,
+      title,
+      filepath: req.file.path
+    }).catch(err => console.error(`Could not analyze uploaded book "${title}":`, err.message));
     res.json({ id: result.lastInsertRowid, title, author });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -554,18 +792,7 @@ app.get('/api/books/:id/search', async (req, res) => {
         }
       }
 
-      // Convert HTML to raw text safely for searching
-      let rawText = cleanHtml(html)
-        .replace(/<[^>]+>/g, ' ')
-        .replace(/\s+/g, ' ');
-      // Decode HTML entities so "mis&nbsp;partes" matches "mis partes"
-      rawText = rawText
-        .replace(/&nbsp;|&#160;|&#x00A0;/gi, ' ')
-        .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(parseInt(n, 10)))
-        .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCharCode(parseInt(n, 16)))
-        .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
-        .replace(/\s+/g, ' ');
-      rawText = rawText.normalize('NFC');
+      const rawText = chapterHtmlToText(html);
       const qNorm = q.normalize('NFC');
       const textLower = rawText.toLowerCase();
 
@@ -593,6 +820,57 @@ app.get('/api/books/:id/search', async (req, res) => {
     }
 
     res.json(results);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/books/:id/frequency', async (req, res) => {
+  try {
+    const text = String(req.body.text || '').trim();
+    if (!text) return res.status(400).json({ error: 'No text provided' });
+
+    const book = db.prepare('SELECT * FROM books WHERE id = ?').get(req.params.id);
+    if (!book) return res.status(404).json({ error: 'Book not found' });
+
+    const analysis = await ensureBookAnalysis(book.id);
+    const tokens = tokenizeSpanishWords(text);
+    if (!tokens.length) {
+      return res.json({ type: 'word', count: 0, exactCount: 0, lemmaCount: 0, freshlyAnalyzed: analysis?.freshlyAnalyzed || false });
+    }
+
+    if (tokens.length > 1) {
+      const normalizedPhrase = normalizeTextForPhraseSearch(text);
+      const chapters = db.prepare('SELECT normalized_text FROM book_chapter_cache WHERE book_id = ? ORDER BY chapter_index').all(book.id);
+      const count = chapters.reduce((sum, chapter) => sum + countPhraseOccurrences(chapter.normalized_text, normalizedPhrase), 0);
+      return res.json({
+        type: 'phrase',
+        count,
+        normalizedPhrase,
+        freshlyAnalyzed: analysis?.freshlyAnalyzed || false,
+        analyzedAt: analysis?.analyzedAt || null
+      });
+    }
+
+    const surfaceKey = canonicalizeSpanishToken(tokens[0]);
+    const lemmaKey = lemmaKeyForToken(tokens[0]);
+    const exactRow = db.prepare(
+      'SELECT count FROM book_surface_counts WHERE book_id = ? AND surface_key = ?'
+    ).get(book.id, surfaceKey);
+    const lemmaRow = db.prepare(
+      'SELECT count, sample FROM book_lemma_counts WHERE book_id = ? AND lemma_key = ?'
+    ).get(book.id, lemmaKey);
+
+    res.json({
+      type: 'word',
+      count: lemmaRow?.count || exactRow?.count || 0,
+      exactCount: exactRow?.count || 0,
+      lemmaCount: lemmaRow?.count || 0,
+      lemmaKey,
+      sample: lemmaRow?.sample || tokens[0],
+      freshlyAnalyzed: analysis?.freshlyAnalyzed || false,
+      analyzedAt: analysis?.analyzedAt || null
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -992,5 +1270,8 @@ app.get('/api/tts', async (req, res) => {
 });
 
 autoImport().then(() => {
-  app.listen(PORT, () => console.log(`LingLo → http://localhost:${PORT}`));
+  app.listen(PORT, () => {
+    console.log(`LingLo → http://localhost:${PORT}`);
+    backfillBookAnalyses().catch(err => console.error('Book frequency backfill failed:', err.message));
+  });
 });
