@@ -655,6 +655,7 @@
     let unknown = 0;
     let flipped = false;
     let currentView = 'list'; // 'cards' | 'list'
+    const filterStorageKey = 'linglo_flashcards_filters';
 
     function rarityBadge(zipf) {
       if (zipf === null || zipf === undefined) return '';
@@ -699,6 +700,7 @@
         rarityMap = await r.json();
       } catch { rarityMap = {}; }
       populateFilter();
+      restoreFilterState();
       rebuildView();
     }
 
@@ -721,6 +723,31 @@
     function getMetaFilter() { return document.getElementById('meta-filter').value; }
     function getSort() { return document.getElementById('sort-select').value; }
     function getSearch() { return normalizeText(document.getElementById('search-input').value.trim()); }
+
+    function saveFilterState() {
+      try {
+        localStorage.setItem(filterStorageKey, JSON.stringify({
+          book: getFilter(),
+          type: getTypeFilter(),
+          rarity: getRarityFilter(),
+          meta: getMetaFilter(),
+          sort: getSort(),
+          search: document.getElementById('search-input').value
+        }));
+      } catch {}
+    }
+
+    function restoreFilterState() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(filterStorageKey) || '{}');
+        if (saved.book !== undefined) document.getElementById('book-filter').value = saved.book;
+        if (saved.type !== undefined) document.getElementById('type-filter').value = saved.type;
+        if (saved.rarity !== undefined) document.getElementById('rarity-filter').value = saved.rarity;
+        if (saved.meta !== undefined) document.getElementById('meta-filter').value = saved.meta;
+        if (saved.sort !== undefined) document.getElementById('sort-select').value = saved.sort;
+        if (saved.search !== undefined) document.getElementById('search-input').value = saved.search;
+      } catch {}
+    }
 
     function getFilteredWords() {
       const filter = getFilter();
@@ -786,6 +813,7 @@
     }
 
     function rebuildView() {
+      saveFilterState();
       if (currentView === 'cards') buildDeck();
       else renderList();
       updateCount();
