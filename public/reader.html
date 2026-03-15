@@ -330,6 +330,22 @@
       font-style: italic;
       font-weight: 400;
     }
+    .regional-usage {
+      display: none;
+      margin-top: 10px;
+      padding: 9px 11px;
+      border-radius: 9px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      font-size: 0.82rem;
+      line-height: 1.45;
+      color: var(--text-muted);
+    }
+    .regional-usage.visible { display: block; }
+    .regional-usage strong {
+      color: var(--text);
+      font-weight: 600;
+    }
     .alt-meanings {
       display: none;
       margin-top: 14px;
@@ -1024,6 +1040,7 @@
           </div>
           <div class="translate-label">Meaning Here</div>
           <div class="sidebar-translation" id="sidebar-translation"></div>
+          <div class="regional-usage" id="regional-usage"></div>
           <div class="alt-meanings" id="alt-meanings-wrap">
             <div class="translate-label">Other Common Meanings</div>
             <div class="alt-meanings-list" id="alt-meanings"></div>
@@ -1089,6 +1106,6 @@
       <button class="popup-btn primary" id="popup-more-btn">Details →</button>
     </div>
   </div>
-  <script src="reader.js?v=4.81"></script>
+  <script src="reader.js?v=4.82"></script>
 </body>
 </html>

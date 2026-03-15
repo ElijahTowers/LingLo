@@ -31,6 +31,7 @@ async function fetchSentenceTranslation(word, sentence) {
 // ── Rarity helpers ──
 const rarityCache = new Map();
 const frequencyCache = new Map();
+const regionalUsageCache = new Map();
 let activeFrequencyRequest = '';
 async function fetchRarity(words) {
   const needed = words.filter(w => !rarityCache.has(w));
@@ -158,6 +159,37 @@ async function loadBookFrequency(text) {
     popupCount.textContent = 'Book frequency unavailable';
     popupNote.textContent = 'Try again in a moment.';
   }
+}
+
+function resetRegionalUsage() {
+  const el = document.getElementById('regional-usage');
+  el.textContent = '';
+  el.classList.remove('visible');
+}
+
+async function loadRegionalUsage(text, sentence) {
+  const el = document.getElementById('regional-usage');
+  const key = `${text.trim().toLowerCase()}::${(sentence || '').trim().toLowerCase()}`;
+  if (regionalUsageCache.has(key)) {
+    el.innerHTML = `<strong>Regional usage:</strong> ${escapeHtml(regionalUsageCache.get(key))}`;
+    el.classList.add('visible');
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/regional-usage', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, sentence })
+    });
+    if (!res.ok) throw new Error();
+    const label = (await res.text()).trim();
+    if (!label) return;
+    regionalUsageCache.set(key, label);
+    el.innerHTML = `<strong>Regional usage:</strong> ${escapeHtml(label)}`;
+    el.classList.add('visible');
+    scheduleTranslateScrollHintUpdate();
+  } catch {}
 }
 
 let chapters = [];
@@ -777,11 +809,13 @@ function showWordView(word, sentence) {
   document.getElementById('word-view').style.display = 'flex';
   document.getElementById('sidebar-word').textContent = word;
   resetBookFrequency();
+  resetRegionalUsage();
   document.getElementById('rarity-badge').innerHTML = '';
   fetchRarity([word]).then(([zipf]) => {
     document.getElementById('rarity-badge').innerHTML = rarityBadge(zipf);
   });
   loadBookFrequency(word);
+  loadRegionalUsage(word, sentence);
   document.getElementById('sidebar-translation').textContent = '';
   document.getElementById('sidebar-translation').className = 'sidebar-translation';
   document.getElementById('alt-meanings').innerHTML = '';
@@ -838,6 +872,7 @@ function clearWordView() {
   document.getElementById('word-view').style.display = 'none';
   activeFrequencyRequest = '';
   resetBookFrequency();
+  resetRegionalUsage();
   document.getElementById('rarity-badge').innerHTML = '';
   document.getElementById('explanation').textContent = '';
   document.getElementById('explanation').classList.remove('visible');

@@ -1,5 +1,5 @@
 require('dotenv').config();
-const APP_VERSION = 'v4.81';
+const APP_VERSION = 'v4.82';
 const express = require('express');
 const crypto = require('crypto');
 const multer = require('multer');
@@ -1157,6 +1157,28 @@ Rules:
     res.end();
   } catch {
     res.status(503).end('Ollama not available');
+  }
+});
+
+app.post('/api/regional-usage', async (req, res) => {
+  const { text, sentence } = req.body;
+  if (!text?.trim()) return res.status(400).json({ error: 'No text provided' });
+  try {
+    const label = await ollamaGenerateText(
+      `You are a concise Spanish usage classifier. Classify whether the Spanish word or phrase "${text.trim()}"${sentence ? ` in the sentence "${sentence}"` : ''} is more associated with Spain, more associated with Latin American Spanish, or broadly neutral.
+
+Reply with EXACTLY one of these labels:
+- Broadly neutral
+- Mostly Spain
+- Mostly Latin America
+- Context-dependent
+
+Prefer "Broadly neutral" if the term is standard across regions.`
+    );
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.end(label.trim());
+  } catch {
+    res.status(503).end('Broadly neutral');
   }
 });
 
