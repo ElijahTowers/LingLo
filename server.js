@@ -1,5 +1,5 @@
 require('dotenv').config();
-const APP_VERSION = 'v4.77';
+const APP_VERSION = 'v4.78';
 const express = require('express');
 const crypto = require('crypto');
 const multer = require('multer');
@@ -940,8 +940,8 @@ app.get('/api/books/:id/search', async (req, res) => {
       }
 
       const rawText = chapterHtmlToText(html);
-      const qNorm = q.normalize('NFC');
-      const textLower = rawText.toLowerCase();
+      const qNorm = normalizeSpanishLetters(q.normalize('NFC'));
+      const textLower = normalizeSpanishLetters(rawText);
 
       let matchIdx = textLower.indexOf(qNorm);
       while (matchIdx !== -1) {

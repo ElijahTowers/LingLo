@@ -433,6 +433,16 @@ function escapeHtml(text) {
     .replace(/>/g, '&gt;');
 }
 
+function normalizeSearchText(text) {
+  return text
+    .toLowerCase()
+    .replace(/[áàäâ]/g, 'a')
+    .replace(/[éèëê]/g, 'e')
+    .replace(/[íìïî]/g, 'i')
+    .replace(/[óòöô]/g, 'o')
+    .replace(/[úùüû]/g, 'u');
+}
+
 function markSavedWords(container) {
   container.querySelectorAll('.word').forEach(span => {
     if (savedWords.has(cleanWord(span.textContent).toLowerCase())) {
@@ -1325,8 +1335,11 @@ document.addEventListener('click', e => {
 function openSearch() {
   document.getElementById('search-bar').classList.add('visible');
   document.body.classList.add('search-open');
-  document.getElementById('search-input').focus();
-  document.getElementById('search-input').select();
+  const input = document.getElementById('search-input');
+  requestAnimationFrame(() => {
+    input.focus();
+    input.select();
+  });
 }
 
 function closeSearch() {
@@ -1351,22 +1364,35 @@ function clearSearchHighlights() {
 // Returns array of "matches"; each match is an array of .word elements to highlight.
 function findSearchMatchesInChapter(query) {
   const words = [...document.querySelectorAll('#content .word')];
-  const q = query.trim().toLowerCase();
+  const q = normalizeSearchText(query.trim());
   const queryWords = q.split(/\s+/).filter(Boolean);
   if (!queryWords.length) return [];
   if (queryWords.length === 1) {
-    return words.filter(w => cleanWord(w.textContent).toLowerCase() === q).map(w => [w]);
+    return words.filter(w => normalizeSearchText(cleanWord(w.textContent)) === q).map(w => [w]);
   }
   const matches = [];
   for (let i = 0; i <= words.length - queryWords.length; i++) {
     const run = words
       .slice(i, i + queryWords.length)
-      .map(w => cleanWord(w.textContent).toLowerCase())
+      .map(w => normalizeSearchText(cleanWord(w.textContent)))
       .filter(Boolean)
       .join(' ');
     if (run === q) matches.push(words.slice(i, i + queryWords.length));
   }
   return matches;
+}
+
+function settleSearchViewport() {
+  if (window.matchMedia('(pointer: coarse)').matches) {
+    document.getElementById('search-input').blur();
+  }
+  return new Promise(resolve => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        setTimeout(resolve, window.matchMedia('(pointer: coarse)').matches ? 180 : 60);
+      });
+    });
+  });
 }
 
 function doSearch() {
@@ -1375,7 +1401,7 @@ function doSearch() {
   searchCurrent = -1;
   bookSearchResults = [];
   currentBookSearchIndex = -1;
-  const query = document.getElementById('search-input').value.trim().toLowerCase();
+  const query = normalizeSearchText(document.getElementById('search-input').value.trim());
   if (!query) {
     document.getElementById('search-count').textContent = '';
     return;
@@ -1414,10 +1440,10 @@ function goToBookSearchResult(index) {
   };
   if (result.chapterIndex !== currentIndex) {
     loadChapter(result.chapterIndex, false, 0).then(() => {
-      setTimeout(loadTarget, 200);
+      settleSearchViewport().then(loadTarget);
     });
   } else {
-    loadTarget();
+    settleSearchViewport().then(loadTarget);
   }
 }
 
