@@ -192,6 +192,7 @@ function renderLayoutFixture() {
 
   requestAnimationFrame(() => {
     document.body.dataset.fixtureReady = 'true';
+    updateTranslateScrollHint();
   });
 }
 
@@ -401,6 +402,7 @@ async function activatePhrase(selected, startSpan) {
           popupSentTrans.innerHTML = hlToHtml(result);
           popupSentTrans.classList.add('visible');
           positionPopup(startSpan);
+          scheduleTranslateScrollHintUpdate();
         }).catch(() => {});
     }
   } else {
@@ -441,7 +443,7 @@ async function activatePhrase(selected, startSpan) {
       sentTransEl.innerHTML = '';
       sentTransEl.classList.add('visible');
       fetchSentenceTranslation(text, currentSentence)
-        .then(result => { sentTransEl.innerHTML = hlToHtml(result); })
+        .then(result => { sentTransEl.innerHTML = hlToHtml(result); scheduleTranslateScrollHintUpdate(); })
         .catch(() => { sentTransEl.innerHTML = ''; sentTransEl.classList.remove('visible'); });
     }
   }
@@ -617,7 +619,7 @@ document.getElementById('content').addEventListener('click', async e => {
       sentTransEl.innerHTML = '';
       sentTransEl.classList.add('visible');
       fetchSentenceTranslation(word, currentSentence)
-        .then(result => { sentTransEl.innerHTML = hlToHtml(result); })
+        .then(result => { sentTransEl.innerHTML = hlToHtml(result); scheduleTranslateScrollHintUpdate(); })
         .catch(() => { sentTransEl.innerHTML = ''; sentTransEl.classList.remove('visible'); });
     }
   }
@@ -637,6 +639,7 @@ function showWordView(word, sentence) {
   document.getElementById('sidebar-translation').className = 'sidebar-translation';
   document.getElementById('alt-meanings').innerHTML = '';
   document.getElementById('alt-meanings-wrap').classList.remove('visible');
+  scheduleTranslateScrollHintUpdate();
 
   // Sentence with highlight
   const sentEl = document.getElementById('sidebar-sentence');
@@ -680,6 +683,7 @@ function showWordView(word, sentence) {
   const sentTransEl = document.getElementById('sentence-translation');
   sentTransEl.textContent = '';
   sentTransEl.classList.remove('visible');
+  scheduleTranslateScrollHintUpdate();
 }
 
 function clearWordView() {
@@ -703,6 +707,7 @@ function clearWordView() {
   clearDragSel();
   currentWord = '';
   currentTranslation = '';
+  scheduleTranslateScrollHintUpdate();
 }
 
 function updateSaveBtn(word) {
@@ -744,6 +749,7 @@ async function loadAlternativeMeanings(text, sentence, primaryMeaning) {
     if (!meanings.length) return;
     list.innerHTML = meanings.map(line => `<div class="alt-meaning-item">${escapeHtml(line)}</div>`).join('');
     wrap.classList.add('visible');
+    scheduleTranslateScrollHintUpdate();
   } catch {}
 }
 
@@ -822,6 +828,7 @@ document.getElementById('explain-btn').addEventListener('click', async () => {
   }
   btn.textContent = '✦ Explain';
   btn.disabled = false;
+  scheduleTranslateScrollHintUpdate();
 });
 
 // ── Conjugate ──
@@ -916,17 +923,34 @@ function updateWordsTabCount() {
   btn.textContent = count > 0 ? `Words (${count})` : 'Words';
 }
 
+function updateTranslateScrollHint() {
+  const panel = document.getElementById('panel-translate');
+  const hint = document.getElementById('translate-scroll-hint');
+  const sidebar = document.getElementById('sidebar');
+  const canScroll = panel.scrollHeight - panel.clientHeight > 20;
+  const hasMoreBelow = panel.scrollHeight - panel.clientHeight - panel.scrollTop > 20;
+  const isActive = !panel.classList.contains('hidden') && !sidebar.classList.contains('closed');
+  hint.classList.toggle('visible', isActive && canScroll && hasMoreBelow);
+}
+
+function scheduleTranslateScrollHintUpdate() {
+  requestAnimationFrame(updateTranslateScrollHint);
+}
+
 // ── Tabs ──
 function showTab(name) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('hidden', p.id !== `panel-${name}`));
   if (name === 'words') loadWordsTab();
   if (name === 'stats') loadStatsTab();
+  scheduleTranslateScrollHintUpdate();
 }
 
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => showTab(btn.dataset.tab));
 });
+document.getElementById('panel-translate').addEventListener('scroll', updateTranslateScrollHint, { passive: true });
+window.addEventListener('resize', scheduleTranslateScrollHintUpdate);
 
 // ── Sidebar toggle ──
 function isMobile() { return window.innerWidth < 640; }
@@ -1029,7 +1053,7 @@ document.getElementById('popup-more-btn').addEventListener('click', (e) => {
     sentTransEl.innerHTML = '';
     sentTransEl.classList.add('visible');
     fetchSentenceTranslation(currentWord, currentSentence)
-      .then(result => { sentTransEl.innerHTML = hlToHtml(result); })
+      .then(result => { sentTransEl.innerHTML = hlToHtml(result); scheduleTranslateScrollHintUpdate(); })
       .catch(() => { sentTransEl.innerHTML = ''; sentTransEl.classList.remove('visible'); });
   }
 });
@@ -1056,6 +1080,7 @@ function openSidebar() {
       setupPagination(ratio, true);
     }, 270);
   }
+  scheduleTranslateScrollHintUpdate();
 }
 function closeSidebar(fromPopstate = false) {
   sidebarOpen = false;
@@ -1072,6 +1097,7 @@ function closeSidebar(fromPopstate = false) {
       setupPagination(ratio, true);
     }, 270);
   }
+  scheduleTranslateScrollHintUpdate();
 }
 
 document.getElementById('sidebar-toggle').addEventListener('click', () => {

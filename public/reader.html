@@ -175,6 +175,7 @@
       display: flex;
       flex-direction: column;
       overflow: hidden;
+      position: relative;
       transition: width 0.25s ease, border-color 0.25s;
       overscroll-behavior: none;
       touch-action: pan-y;
@@ -226,6 +227,26 @@
     .tab-panel.hidden { display: none; }
     .tab-panel::-webkit-scrollbar { width: 4px; }
     .tab-panel::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 2px; }
+    .translate-scroll-hint {
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      bottom: 14px;
+      display: none;
+      align-items: flex-end;
+      justify-content: center;
+      gap: 8px;
+      padding: 36px 0 10px;
+      background: linear-gradient(to bottom, rgba(20, 17, 13, 0), rgba(20, 17, 13, 0.94) 55%);
+      color: var(--text-muted);
+      font-size: 0.74rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      pointer-events: none;
+      z-index: 2;
+    }
+    .translate-scroll-hint.visible { display: flex; }
+    .translate-scroll-hint svg { opacity: 0.8; }
 
     /* ── Translate panel ── */
     .sidebar-empty {
@@ -833,6 +854,7 @@
     body.theme-light .word-card-chapter { color: rgba(0,0,0,0.3); }
     body.theme-light .word-card-delete { color: rgba(0,0,0,0.2); }
     body.theme-light .tab-panel::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); }
+    body.theme-light .translate-scroll-hint { background: linear-gradient(to bottom, rgba(243, 236, 225, 0), rgba(243, 236, 225, 0.96) 55%); }
 
     /* ── Theme: e-ink ── */
     body.theme-ereader .reader-header { background: #ffffff; border-bottom-color: rgba(0,0,0,0.2); }
@@ -853,6 +875,7 @@
     body.theme-ereader .tab-panel::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); }
     body.theme-ereader #version-badge { color: rgba(0,0,0,0.45); }
     body.theme-ereader #explain-model { color: rgba(0,0,0,0.3); }
+    body.theme-ereader .translate-scroll-hint { background: linear-gradient(to bottom, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.96) 55%); color: rgba(0,0,0,0.55); }
     body.theme-ereader .toc-dropdown::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); }
   </style>
 </head>
@@ -951,6 +974,12 @@
 
         </div>
       </div>
+      <div class="translate-scroll-hint" id="translate-scroll-hint" aria-hidden="true">
+        <span>More below</span>
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <path d="M3 5.5L7 9.5L11 5.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
 
 
       <div id="version-badge"></div>
@@ -981,6 +1010,6 @@
       <button class="popup-btn primary" id="popup-more-btn">Details →</button>
     </div>
   </div>
-  <script src="reader.js?v=4.69"></script>
+  <script src="reader.js?v=4.70"></script>
 </body>
 </html>
