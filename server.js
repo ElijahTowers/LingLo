@@ -1,5 +1,5 @@
 require('dotenv').config();
-const APP_VERSION = 'v4.70';
+const APP_VERSION = 'v4.71';
 const express = require('express');
 const crypto = require('crypto');
 const multer = require('multer');
@@ -95,7 +95,8 @@ function timingSafeCompare(a, b) {
 
 function authMiddleware(req, res, next) {
   if (isAuthed(req.headers.cookie)) return next();
-  res.redirect('/login');
+  const nextUrl = encodeURIComponent(req.originalUrl || '/');
+  res.redirect(`/login?next=${nextUrl}`);
 }
 
 async function ollamaGenerateText(prompt, model = 'qwen2.5-coder:7b') {
@@ -189,6 +190,16 @@ app.use(express.urlencoded({ extended: false }));
 // ── Login routes (no auth required) ──
 app.get('/login', (req, res) => {
   const err = req.url.includes('?err') ? '<p class="err">Wrong password.</p>' : '';
+  let next = '/';
+  try {
+    const u = new URL(`http://linglo.local${req.url}`);
+    const candidate = u.searchParams.get('next');
+    if (candidate && candidate.startsWith('/')) next = candidate;
+  } catch {}
+  const nextEscaped = next
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;');
   res.send(`<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -330,6 +341,7 @@ app.get('/login', (req, res) => {
     <div class="logo">LingLo</div>
     <div class="sub">Enter your password to continue</div>
     <form method="POST" action="/login">
+      <input type="hidden" name="next" value="${nextEscaped}">
       <label for="pw">Password</label>
       <input type="password" id="pw" name="password" autofocus autocomplete="current-password">
       <button type="submit" class="signin-btn">Sign in</button>
@@ -370,13 +382,14 @@ app.post('/login', (req, res) => {
   const ip = req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket.remoteAddress;
   if (isRateLimited(loginAttempts, ip, LOGIN_MAX))
     return res.status(429).send('Too many attempts. Try again in 15 minutes.');
+  const next = typeof req.body.next === 'string' && req.body.next.startsWith('/') ? req.body.next : '/';
   if (timingSafeCompare(req.body.password || '', PASSWORD)) {
     const token = createSession();
     const secure = req.headers['x-forwarded-proto'] === 'https' ? '; Secure' : '';
     res.setHeader('Set-Cookie', `linglo_s=${token}; Path=/; HttpOnly; SameSite=Lax${secure}; Max-Age=2592000`);
-    res.redirect('/');
+    res.redirect(next);
   } else {
-    res.redirect('/login?err=1');
+    res.redirect(`/login?err=1&next=${encodeURIComponent(next)}`);
   }
 });
 

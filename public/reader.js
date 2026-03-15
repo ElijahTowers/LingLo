@@ -74,6 +74,15 @@ let pageArrivalTime = 0;
 const MIN_PAGE_TIME = 30000; // 30 s on a page before its words count
 
 // ── Progress persistence ──
+function updateProgressUrl(chapter, ratio) {
+  if (fixtureMode || !bookId) return;
+  const url = new URL(location.href);
+  url.searchParams.set('book', bookId);
+  url.searchParams.set('ch', String(chapter));
+  url.searchParams.set('r', String(Math.max(0, Math.min(1, ratio))));
+  history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+}
+
 function saveProgress() {
   const ratio = totalPages > 1 ? currentPage / (totalPages - 1) : 0;
   try {
@@ -83,11 +92,25 @@ function saveProgress() {
       total: chapters.length
     }));
   } catch {}
+  updateProgressUrl(currentIndex, ratio);
 }
 function loadProgress() {
+  const chapterFromUrl = parseInt(params.get('ch'), 10);
+  const ratioFromUrl = parseFloat(params.get('r'));
+  if (!isNaN(chapterFromUrl)) {
+    return {
+      chapter: chapterFromUrl,
+      ratio: isNaN(ratioFromUrl) ? 0 : Math.max(0, Math.min(1, ratioFromUrl))
+    };
+  }
   try {
     const p = JSON.parse(localStorage.getItem(`linglo-progress-${bookId}`));
-    if (p && typeof p.chapter === 'number') return p;
+    if (p && typeof p.chapter === 'number') {
+      return {
+        chapter: p.chapter,
+        ratio: typeof p.ratio === 'number' ? Math.max(0, Math.min(1, p.ratio)) : 0
+      };
+    }
   } catch {}
   // fallback to legacy chapter-only key
   const ch = parseInt(localStorage.getItem(`linglo-chapter-${bookId}`));
