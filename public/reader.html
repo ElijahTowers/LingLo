@@ -218,6 +218,9 @@
       overflow-y: auto;
       display: flex;
       flex-direction: column;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
+      touch-action: pan-y;
     }
     .tab-panel.hidden { display: none; }
     .tab-panel::-webkit-scrollbar { width: 4px; }
@@ -364,6 +367,9 @@
       flex: 1;
       overflow-y: auto;
       padding-right: 6px;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
+      touch-action: pan-y;
     }
     .word-view.explaining .sidebar-explain-area::-webkit-scrollbar { width: 4px; }
     .word-view.explaining .sidebar-explain-area::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 2px; }
@@ -980,6 +986,6 @@
       <button class="popup-btn primary" id="popup-more-btn">Details →</button>
     </div>
   </div>
-  <script src="reader.js?v=4.65"></script>
+  <script src="reader.js?v=4.66"></script>
 </body>
 </html>

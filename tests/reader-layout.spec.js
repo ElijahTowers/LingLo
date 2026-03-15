@@ -85,6 +85,7 @@ test.describe('reader layout fixtures', () => {
       const metrics = await page.evaluate(() => {
         const area = document.querySelector('.sidebar-explain-area');
         const model = document.getElementById('explain-model');
+        area.scrollTop = 0;
         area.scrollTop = area.scrollHeight;
         const areaRect = area.getBoundingClientRect();
         const modelRect = model.getBoundingClientRect();
@@ -109,6 +110,7 @@ test.describe('reader layout fixtures', () => {
       const metrics = await page.evaluate(() => {
         const panel = document.getElementById('panel-translate');
         const target = document.getElementById('sentence-translation');
+        panel.scrollTop = 0;
         panel.scrollTop = panel.scrollHeight;
         const panelRect = panel.getBoundingClientRect();
         const targetRect = target.getBoundingClientRect();
