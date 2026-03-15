@@ -1,5 +1,5 @@
 require('dotenv').config();
-const APP_VERSION = 'v4.75';
+const APP_VERSION = 'v4.76';
 const express = require('express');
 const crypto = require('crypto');
 const multer = require('multer');
@@ -223,15 +223,33 @@ function countWordTokens(text) {
   return (text.match(/[A-Za-zÀ-ÖØ-öø-ÿ']+/g) || []).length;
 }
 
+function extractContextualFocus(word, sentence) {
+  const target = canonicalizeSpanishToken(word);
+  if (!target || !sentence) return word;
+  const tokens = [...sentence.matchAll(/[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+/g)].map(match => ({
+    raw: match[0],
+    canonical: canonicalizeSpanishToken(match[0])
+  }));
+  const idx = tokens.findIndex(token => token.canonical === target);
+  if (idx <= 0) return word;
+  const previous = tokens[idx - 1].canonical;
+  if (['me', 'te', 'se', 'nos', 'os'].includes(previous)) {
+    return `${tokens[idx - 1].raw} ${tokens[idx].raw}`;
+  }
+  return word;
+}
+
 async function translateSingleWordInContext(word, sentence) {
+  const focus = extractContextualFocus(word, sentence);
   const basePrompt = `The user clicked the single Spanish word "${word}" in this sentence:
 "${sentence}"
 
-Translate ONLY that one word into English.
+Translate the clicked word as it functions here. If it is part of a reflexive mini-construction like "${focus}", use that local construction to understand the word, but still return only the smallest English equivalent for the clicked word's meaning.
 
 Rules:
 - Return the smallest exact English equivalent of the clicked word only
 - Do not include words that translate neighboring Spanish words
+- Do not include following prepositional phrases or objects
 - If the clicked word is a preposition, article, pronoun, or particle, still translate only that single word
 - No explanations
 - No punctuation
@@ -241,7 +259,9 @@ Good examples:
 - "por" in "lo llevo por la estacion" -> "through"
 - "a" in "fue a la casa" -> "to"
 - "de" in "el libro de Harry" -> "of"
-- "llamarse" in "Podria llamarse Harvey" -> "be named"`;
+- "llamarse" in "Podria llamarse Harvey" -> "be named"
+- "dirigio" in "se dirigio hacia los andenes" -> "headed"
+- "dirigio" in "dirigio la mirada a Harry" -> "turned"`;
 
   let translation = await ollamaGenerateText(basePrompt);
   if (countWordTokens(translation) <= 3) return translation.trim();
@@ -250,6 +270,7 @@ Good examples:
 
 Clicked word: "${word}"
 Sentence: "${sentence}"
+Local focus: "${focus}"
 Bad answer: "${translation}"
 
 Reply again with ONLY the smallest English equivalent of the clicked Spanish word itself.
@@ -257,6 +278,7 @@ Reply again with ONLY the smallest English equivalent of the clicked Spanish wor
 Rules:
 - Maximum 3 English words
 - No surrounding phrase
+- No translation of following prepositions or noun phrases
 - No explanations
 - No punctuation
 - No quotes`;
