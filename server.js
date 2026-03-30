@@ -1,5 +1,5 @@
 require('dotenv').config();
-const APP_VERSION = 'v4.87';
+const APP_VERSION = 'v4.88';
 const express = require('express');
 const crypto = require('crypto');
 const multer = require('multer');
@@ -171,6 +171,95 @@ async function ollamaGenerateText(prompt, model = 'qwen2.5-coder:7b') {
   return out.trim();
 }
 
+// ── Gemini backend ──
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
+const GEMINI_MODEL = 'gemini-2.0-flash';
+
+async function geminiGenerateText(prompt) {
+  if (!GEMINI_API_KEY) throw new Error('No Gemini API key configured');
+  const r = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+    }
+  );
+  if (!r.ok) throw new Error(`Gemini error: ${r.status}`);
+  const data = await r.json();
+  return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+}
+
+async function geminiStream(prompt, res) {
+  if (!GEMINI_API_KEY) throw new Error('No Gemini API key configured');
+  const r = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:streamGenerateContent?alt=sse&key=${GEMINI_API_KEY}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+    }
+  );
+  if (!r.ok) throw new Error(`Gemini error: ${r.status}`);
+  const reader = r.body.getReader();
+  const decoder = new TextDecoder();
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    for (const line of decoder.decode(value, { stream: true }).split('\n')) {
+      if (!line.startsWith('data: ')) continue;
+      try {
+        const json = JSON.parse(line.slice(6));
+        const text = json.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (text) res.write(text);
+      } catch { }
+    }
+  }
+  res.end();
+}
+
+// ── Settings (ai backend) ──
+const SETTINGS_FILE = path.join(__dirname, 'db', 'settings.json');
+function loadSettings() {
+  try { return JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')); } catch { return {}; }
+}
+function saveSettings(s) {
+  fs.writeFileSync(SETTINGS_FILE, JSON.stringify(s, null, 2));
+}
+let appSettings = loadSettings();
+
+// ── AI router ──
+async function aiGenerateText(prompt) {
+  if ((appSettings.aiBackend || 'ollama') === 'gemini') return geminiGenerateText(prompt);
+  return ollamaGenerateText(prompt);
+}
+
+async function aiStream(prompt, res) {
+  if ((appSettings.aiBackend || 'ollama') === 'gemini') return geminiStream(prompt, res);
+  // Ollama streaming
+  const r = await fetch('http://localhost:11435/api/generate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: 'qwen2.5-coder:7b', prompt, stream: true })
+  });
+  if (!r.ok || !r.body) throw new Error('Ollama not available');
+  const reader = r.body.getReader();
+  const decoder = new TextDecoder();
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    for (const line of decoder.decode(value).split('\n')) {
+      if (!line.trim()) continue;
+      try {
+        const json = JSON.parse(line);
+        if (json.response) res.write(json.response);
+        if (json.done) { res.end(); return; }
+      } catch { }
+    }
+  }
+  res.end();
+}
+
 function tokenizeForHighlight(text) {
   const tokens = [];
   const re = /[A-Za-zÀ-ÖØ-öø-ÿ']+/g;
@@ -274,7 +363,7 @@ Good examples:
 - "dirigio" in "se dirigio hacia los andenes" -> "headed"
 - "dirigio" in "dirigio la mirada a Harry" -> "turned"`;
 
-  let translation = await ollamaGenerateText(basePrompt);
+  let translation = await aiGenerateText(basePrompt);
   if (countWordTokens(translation) <= 3) return translation.trim();
 
   const retryPrompt = `Your previous answer was too broad because it included neighboring words.
@@ -294,7 +383,7 @@ Rules:
 - No punctuation
 - No quotes`;
 
-  translation = await ollamaGenerateText(retryPrompt);
+  translation = await aiGenerateText(retryPrompt);
   return translation.trim();
 }
 
@@ -1109,10 +1198,10 @@ app.post('/api/translate', async (req, res) => {
     const singleWordSelection = countWordTokens(trimmedText) === 1;
     let prompt;
     if (type === 'context-combined') {
-      const sentenceTranslation = await ollamaGenerateText(
+      const sentenceTranslation = await aiGenerateText(
         `Translate the following Spanish sentence to natural English. Reply ONLY with the translated English sentence, nothing else.\n\nSentence: "${sentence}"`
       );
-      const focusTranslation = await ollamaGenerateText(
+      const focusTranslation = await aiGenerateText(
         `Translate the Spanish word or phrase "${text}" in the context of this sentence: "${sentence}".
 
 Reply ONLY with the smallest exact English equivalent for that word or phrase.
@@ -1141,38 +1230,11 @@ Examples:
         : `Translate the Spanish word or phrase "${trimmedText}" to English. Reply with ONLY the English translation, nothing else.`;
     }
 
-    const r = await fetch('http://localhost:11435/api/generate', {
-      headers: { 'X-Source': 'linglo' },
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'qwen2.5-coder:7b',
-        prompt: prompt,
-        stream: true
-      })
-    });
-
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
     res.setHeader('Transfer-Encoding', 'chunked');
-    res.setHeader('X-Model', 'qwen2.5-coder:7b');
-
-    const reader = r.body.getReader();
-    const decoder = new TextDecoder();
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      for (const line of decoder.decode(value).split('\n')) {
-        if (!line.trim()) continue;
-        try {
-          const json = JSON.parse(line);
-          if (json.response) res.write(json.response);
-          if (json.done) { res.end(); return; }
-        } catch { }
-      }
-    }
-    res.end();
+    await aiStream(prompt, res);
   } catch {
-    res.status(503).end('Ollama not available');
+    res.status(503).end('AI not available');
   }
 });
 
@@ -1180,13 +1242,7 @@ app.post('/api/meanings', async (req, res) => {
   const { text, sentence, primaryMeaning } = req.body;
   if (!text?.trim()) return res.status(400).json({ error: 'No text provided' });
   try {
-    const r = await fetch('http://localhost:11435/api/generate', {
-      headers: { 'X-Source': 'linglo' },
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'qwen2.5-coder:7b',
-        prompt: `You are a concise Spanish dictionary assistant. The user clicked the Spanish word or phrase "${text}"${sentence ? ` in the sentence "${sentence}"` : ''}. The main in-context translation is "${primaryMeaning || ''}".
+    const prompt = `You are a concise Spanish dictionary assistant. The user clicked the Spanish word or phrase "${text}"${sentence ? ` in the sentence "${sentence}"` : ''}. The main in-context translation is "${primaryMeaning || ''}".
 
 Give up to 3 short alternative English meanings or translations that this Spanish word or phrase can also have.
 
@@ -1196,31 +1252,12 @@ Rules:
 - No quotes
 - No explanations
 - Avoid repeating the exact main in-context translation if possible
-- If there are no good alternatives, reply with: none`,
-        stream: true
-      })
-    });
-
+- If there are no good alternatives, reply with: none`;
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
     res.setHeader('Transfer-Encoding', 'chunked');
-
-    const reader = r.body.getReader();
-    const decoder = new TextDecoder();
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      for (const line of decoder.decode(value).split('\n')) {
-        if (!line.trim()) continue;
-        try {
-          const json = JSON.parse(line);
-          if (json.response) res.write(json.response);
-          if (json.done) { res.end(); return; }
-        } catch { }
-      }
-    }
-    res.end();
+    await aiStream(prompt, res);
   } catch {
-    res.status(503).end('Ollama not available');
+    res.status(503).end('AI not available');
   }
 });
 
@@ -1228,7 +1265,7 @@ app.post('/api/regional-usage', async (req, res) => {
   const { text, sentence } = req.body;
   if (!text?.trim()) return res.status(400).json({ error: 'No text provided' });
   try {
-    const label = await ollamaGenerateText(
+    const label = await aiGenerateText(
       `You are a concise Spanish usage classifier. Classify whether the Spanish word or phrase "${text.trim()}"${sentence ? ` in the sentence "${sentence}"` : ''} is more associated with Spain, more associated with Latin American Spanish, or broadly neutral.
 
 Reply with EXACTLY one of these labels:
@@ -1249,38 +1286,12 @@ Prefer "Broadly neutral" if the term is standard across regions.`
 app.post('/api/explain', async (req, res) => {
   const { word, sentence } = req.body;
   try {
-    const r = await fetch('http://localhost:11435/api/generate', {
-      headers: { 'X-Source': 'linglo' },
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'qwen2.5-coder:7b',
-        prompt: `You are a concise Spanish language tutor. Always respond in English. The learner clicked on "${word}" in:\n"${sentence}"\n\nGive 3 short lines:\n1. Meaning in this context\n2. Grammar note (tense/conjugation if relevant)\n3. Memory tip\n\nNo headers, just the 3 lines. Respond in English only.`,
-        stream: true
-      })
-    });
-
+    const prompt = `You are a concise Spanish language tutor. Always respond in English. The learner clicked on "${word}" in:\n"${sentence}"\n\nGive 3 short lines:\n1. Meaning in this context\n2. Grammar note (tense/conjugation if relevant)\n3. Memory tip\n\nNo headers, just the 3 lines. Respond in English only.`;
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
     res.setHeader('Transfer-Encoding', 'chunked');
-    res.setHeader('X-Model', 'qwen2.5-coder:7b');
-
-    const reader = r.body.getReader();
-    const decoder = new TextDecoder();
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      for (const line of decoder.decode(value).split('\n')) {
-        if (!line.trim()) continue;
-        try {
-          const json = JSON.parse(line);
-          if (json.response) res.write(json.response);
-          if (json.done) { res.end(); return; }
-        } catch { }
-      }
-    }
-    res.end();
+    await aiStream(prompt, res);
   } catch {
-    res.status(503).end('Ollama not available');
+    res.status(503).end('AI not available');
   }
 });
 
@@ -1300,119 +1311,58 @@ app.post('/api/rarity', (req, res) => {
 app.post('/api/conjugate', async (req, res) => {
   const { word, sentence } = req.body;
   try {
-    const r = await fetch('http://localhost:11435/api/generate', {
-      headers: { 'X-Source': 'linglo' },
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'qwen2.5-coder:7b',
-        prompt: `The Spanish word "${word}" appears in: "${sentence}". Is it a verb? If yes, reply in this exact format (3 lines, nothing else):\nInfinitive: [infinitive]\nPresent: yo [form], tú [form], él [form], nosotros [form], ellos [form]\nPreterite: yo [form]\nIf it is not a verb, reply with just: —`,
-        stream: true
-      })
-    });
+    const prompt = `The Spanish word "${word}" appears in: "${sentence}". Is it a verb? If yes, reply in this exact format (3 lines, nothing else):\nInfinitive: [infinitive]\nPresent: yo [form], tú [form], él [form], nosotros [form], ellos [form]\nPreterite: yo [form]\nIf it is not a verb, reply with just: —`;
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
     res.setHeader('Transfer-Encoding', 'chunked');
-    const reader = r.body.getReader();
-    const decoder = new TextDecoder();
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      for (const line of decoder.decode(value).split('\n')) {
-        if (!line.trim()) continue;
-        try { const j = JSON.parse(line); if (j.response) res.write(j.response); if (j.done) { res.end(); return; } } catch { }
-      }
-    }
-    res.end();
-  } catch { res.status(503).end('Ollama not available'); }
+    await aiStream(prompt, res);
+  } catch { res.status(503).end('AI not available'); }
 });
 
 app.post('/api/idiom', async (req, res) => {
   const { text, sentence } = req.body;
   try {
-    const r = await fetch('http://localhost:11435/api/generate', {
-      headers: { 'X-Source': 'linglo' },
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'qwen2.5-coder:7b',
-        prompt: `Is the Spanish phrase "${text}" an idiomatic expression or fixed phrase? Context: "${sentence}". If yes, reply with one short sentence explaining what it means as an idiom. If no, reply with just: no`,
-        stream: true
-      })
-    });
+    const prompt = `Is the Spanish phrase "${text}" an idiomatic expression or fixed phrase? Context: "${sentence}". If yes, reply with one short sentence explaining what it means as an idiom. If no, reply with just: no`;
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
     res.setHeader('Transfer-Encoding', 'chunked');
-    const reader = r.body.getReader();
-    const decoder = new TextDecoder();
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      for (const line of decoder.decode(value).split('\n')) {
-        if (!line.trim()) continue;
-        try { const j = JSON.parse(line); if (j.response) res.write(j.response); if (j.done) { res.end(); return; } } catch { }
-      }
-    }
-    res.end();
-  } catch { res.status(503).end('Ollama not available'); }
+    await aiStream(prompt, res);
+  } catch { res.status(503).end('AI not available'); }
 });
 
 app.post('/api/summarize', async (req, res) => {
   const { text, title } = req.body;
   if (!text?.trim()) return res.status(400).end('No text');
   try {
-    const r = await fetch('http://localhost:11435/api/generate', {
-      headers: { 'X-Source': 'linglo' },
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'qwen2.5-coder:7b',
-        prompt: `Summarize this chapter${title ? ` ("${title}")` : ''} in 3-4 sentences in English. Be concise, focus on what happens. Do not start with "This chapter".\n\n${text.slice(0, 4000)}`,
-        stream: true
-      })
-    });
+    const prompt = `Summarize this chapter${title ? ` ("${title}")` : ''} in 3-4 sentences in English. Be concise, focus on what happens. Do not start with "This chapter".\n\n${text.slice(0, 4000)}`;
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
     res.setHeader('Transfer-Encoding', 'chunked');
-    const reader = r.body.getReader();
-    const decoder = new TextDecoder();
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      for (const line of decoder.decode(value).split('\n')) {
-        if (!line.trim()) continue;
-        try { const j = JSON.parse(line); if (j.response) res.write(j.response); if (j.done) { res.end(); return; } } catch { }
-      }
-    }
-    res.end();
-  } catch { res.status(503).end('Ollama not available'); }
+    await aiStream(prompt, res);
+  } catch { res.status(503).end('AI not available'); }
 });
 
 app.post('/api/simplify', async (req, res) => {
   const { sentence } = req.body;
   if (!sentence?.trim()) return res.status(400).end('No sentence');
   try {
-    const r = await fetch('http://localhost:11435/api/generate', {
-      headers: { 'X-Source': 'linglo' },
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'qwen2.5-coder:7b',
-        prompt: `Rewrite the following Spanish sentence into "Simple Spanish" suitable for a beginner (A1/A2 level). Keep the original meaning but use simpler words and structures. Respond ONLY with the simplified Spanish sentence, nothing else.\n\nSentence: "${sentence}"`,
-        stream: true
-      })
-    });
+    const prompt = `Rewrite the following Spanish sentence into "Simple Spanish" suitable for a beginner (A1/A2 level). Keep the original meaning but use simpler words and structures. Respond ONLY with the simplified Spanish sentence, nothing else.\n\nSentence: "${sentence}"`;
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
     res.setHeader('Transfer-Encoding', 'chunked');
-    const reader = r.body.getReader();
-    const decoder = new TextDecoder();
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      for (const line of decoder.decode(value).split('\n')) {
-        if (!line.trim()) continue;
-        try { const j = JSON.parse(line); if (j.response) res.write(j.response); if (j.done) { res.end(); return; } } catch { }
-      }
-    }
-    res.end();
-  } catch { res.status(503).end('Ollama not available'); }
+    await aiStream(prompt, res);
+  } catch { res.status(503).end('AI not available'); }
+});
+
+app.get('/api/settings', (req, res) => {
+  res.json({ aiBackend: appSettings.aiBackend || 'ollama' });
+});
+
+app.post('/api/settings', (req, res) => {
+  const { aiBackend } = req.body;
+  if (aiBackend === 'ollama' || aiBackend === 'gemini') {
+    appSettings.aiBackend = aiBackend;
+    saveSettings(appSettings);
+    res.json({ ok: true, aiBackend });
+  } else {
+    res.status(400).json({ error: 'Invalid backend' });
+  }
 });
 
 app.post('/api/words', (req, res) => {

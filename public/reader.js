@@ -1887,5 +1887,38 @@ window.addEventListener('popstate', () => {
   if (wordPopup.classList.contains('visible')) { hidePopup(true); return; }
 });
 
+// ── AI backend toggle ──
+const aiToggleBtn = document.getElementById('ai-toggle');
+let currentAiBackend = 'ollama';
+
+async function loadAiBackend() {
+  try {
+    const data = await (await fetch('/api/settings')).json();
+    currentAiBackend = data.aiBackend || 'ollama';
+  } catch { currentAiBackend = 'ollama'; }
+  renderAiToggle();
+}
+
+function renderAiToggle() {
+  if (!aiToggleBtn) return;
+  aiToggleBtn.textContent = currentAiBackend === 'gemini' ? 'Gemini' : 'Ollama';
+  aiToggleBtn.style.color = currentAiBackend === 'gemini' ? '#4f8ef7' : 'var(--text-muted)';
+}
+
+aiToggleBtn?.addEventListener('click', async () => {
+  const next = currentAiBackend === 'ollama' ? 'gemini' : 'ollama';
+  try {
+    await fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ aiBackend: next })
+    });
+    currentAiBackend = next;
+    renderAiToggle();
+  } catch { }
+});
+
+loadAiBackend();
+
 // ── Boot ──
 init().then(updateWordsTabCount);
