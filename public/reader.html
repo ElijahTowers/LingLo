@@ -660,6 +660,20 @@
       transform: translateX(-50%);
     }
     #word-popup.visible { display: block; }
+    #word-popup .popup-close {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      width: 28px;
+      height: 28px;
+      border: none;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.06);
+      color: var(--text-muted);
+      font-size: 0.95rem;
+      line-height: 1;
+      cursor: pointer;
+    }
     #popup-rarity { margin-bottom: 6px; }
     #word-popup .popup-frequency {
       display: none;
@@ -710,11 +724,12 @@
     #word-popup .popup-sentence-translation.visible { display: block; }
     #word-popup .popup-actions {
       display: flex;
+      flex-wrap: wrap;
       gap: 8px;
       margin-top: 11px;
     }
     #word-popup .popup-btn {
-      flex: 1;
+      flex: 1 1 0;
       background: var(--purple-glow);
       border: 1px solid var(--border-strong);
       border-radius: 8px;
@@ -724,6 +739,10 @@
       cursor: pointer;
       font-weight: 500;
       transition: background 0.15s;
+    }
+    #word-popup .popup-btn:disabled {
+      opacity: 0.45;
+      cursor: default;
     }
     #word-popup .popup-btn:active { background: rgba(212,135,74,0.2); }
     #word-popup .popup-btn.primary {
@@ -1138,6 +1157,7 @@
 
   <!-- Mobile inline translation popup -->
   <div id="word-popup">
+    <button class="popup-close" id="popup-close-btn" aria-label="Close translation popup">✕</button>
     <div class="popup-word" id="popup-word"></div>
     <div id="popup-rarity"></div>
     <div class="popup-frequency" id="popup-frequency">
@@ -1147,10 +1167,11 @@
     <div class="popup-translation loading" id="popup-translation">Translating…</div>
     <div class="popup-sentence-translation" id="popup-sentence-translation"></div>
     <div class="popup-actions">
+      <button class="popup-btn" id="popup-save-btn">💾 Save</button>
       <button class="popup-btn" id="popup-speak-btn">🔊 Speak</button>
       <button class="popup-btn primary" id="popup-more-btn">Details →</button>
     </div>
   </div>
-  <script src="reader.js?v=4.88"></script>
+  <script src="reader.js?v=4.89"></script>
 </body>
 </html>

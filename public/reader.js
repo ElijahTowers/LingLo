@@ -602,6 +602,7 @@ async function activatePhrase(selected, startSpan) {
         popupTranslation.textContent += decoder.decode(value, { stream: true });
       }
       currentTranslation = popupTranslation.textContent.trim();
+      updateSaveBtn(text);
       positionPopup(startSpan);
     } catch {
       popupTranslation.textContent = 'Translation failed';
@@ -786,6 +787,7 @@ document.getElementById('content').addEventListener('click', async e => {
         popupTranslation.textContent += decoder.decode(value, { stream: true });
       }
       currentTranslation = popupTranslation.textContent.trim();
+      updateSaveBtn(word);
       // Re-position after content has rendered and height is known
       if (activeWordEl) positionPopup(activeWordEl);
     } catch {
@@ -930,6 +932,18 @@ function clearWordView() {
   scheduleTranslateScrollHintUpdate();
 }
 
+function updatePopupSaveBtn(word) {
+  const btn = document.getElementById('popup-save-btn');
+  if (!btn) return;
+  const hasWord = !!word;
+  const itemLabel = isPhrase(word || '') ? 'phrase' : 'word';
+  const saved = hasWord && savedWords.has(word.toLowerCase());
+  btn.textContent = saved ? `✕ Remove ${itemLabel}` : `💾 Save ${itemLabel}`;
+  btn.classList.toggle('primary', saved);
+  btn.disabled = !saved && !currentTranslation;
+  btn.title = saved ? `Remove ${itemLabel} from saved items` : `Save ${itemLabel}`;
+}
+
 function updateSaveBtn(word) {
   const btn = document.getElementById('save-btn');
   const itemLabel = isPhrase(word) ? 'phrase' : 'word';
@@ -942,6 +956,7 @@ function updateSaveBtn(word) {
     btn.className = '';
     btn.title = `Save ${itemLabel}`;
   }
+  updatePopupSaveBtn(word);
   updateReencounterNote();
 }
 
@@ -987,8 +1002,7 @@ async function removeSavedWord(id, word) {
   updateReencounterNote();
 }
 
-// ── Save / remove word ──
-document.getElementById('save-btn').addEventListener('click', async () => {
+async function toggleSaveCurrentWord() {
   if (!currentWord) return;
   const existing = savedWords.get(currentWord.toLowerCase());
   if (existing) {
@@ -1015,6 +1029,11 @@ document.getElementById('save-btn').addEventListener('click', async () => {
   updateSaveBtn(currentWord);
   updateWordsTabCount();
   updateReencounterNote();
+}
+
+// ── Save / remove word ──
+document.getElementById('save-btn').addEventListener('click', async () => {
+  await toggleSaveCurrentWord();
 });
 
 // ── Explain ──
@@ -1217,6 +1236,7 @@ function showPopup(word, anchorEl) {
   popupTranslation.textContent = 'Translating…';
   popupTranslation.className = 'popup-translation loading';
   resetBookFrequency();
+  updatePopupSaveBtn(word);
   document.getElementById('popup-rarity').innerHTML = '';
   const pst = document.getElementById('popup-sentence-translation');
   pst.textContent = '';
@@ -1249,6 +1269,16 @@ function hidePopup(skipHistory = false) {
   resetBookFrequency();
   if (!sidebarOpen && !skipHistory) _popOverlayHistory(false);
 }
+
+document.getElementById('popup-close-btn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  hidePopup();
+});
+
+document.getElementById('popup-save-btn').addEventListener('click', async (e) => {
+  e.stopPropagation();
+  await toggleSaveCurrentWord();
+});
 
 document.getElementById('popup-speak-btn').addEventListener('click', (e) => {
   e.stopPropagation();
