@@ -246,7 +246,8 @@ let wordsPerPage = 0;
 let loggedPages = new Set();
 let paginationTimer = null;
 let pageArrivalTime = 0;
-const MIN_PAGE_TIME = 30000; // 30 s on a page before its words count
+const MIN_PAGE_TIME = 12000; // 12 s on a page before its words count
+const PAGE_LOG_CHECK_INTERVAL = 4000;
 
 // ── Progress persistence ──
 function updateProgressUrl(chapter, ratio) {
@@ -1597,6 +1598,7 @@ async function logWordsRead(count, chapterIndex, pageNumber) {
   try {
     const res = await fetch('/api/reading-event', {
       method: 'POST',
+      keepalive: true,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         bookId: parseInt(bookId, 10),
@@ -1609,6 +1611,14 @@ async function logWordsRead(count, chapterIndex, pageNumber) {
     streakStats = await res.json();
   } catch {}
   renderReaderStreakCircle();
+}
+
+function maybeLogCurrentPageRead() {
+  const now = Date.now();
+  if (currentPage < 0 || wordsPerPage <= 0 || loggedPages.has(currentPage) || pageArrivalTime <= 0) return;
+  if ((now - pageArrivalTime) < MIN_PAGE_TIME) return;
+  loggedPages.add(currentPage);
+  logWordsRead(wordsPerPage, currentIndex, currentPage);
 }
 
 function renderReaderStreakCircle() {
@@ -1770,13 +1780,9 @@ function setupPagination(restoreRatio = 0, keepSummary = false) {
 
 function goToPage(n, keepSummary = false) {
   n = Math.max(0, Math.min(n, totalPages - 1));
-  // Log words for the page we're leaving, only if enough time was spent on it
+  // Log the current page before switching away if it already passed the threshold.
   const now = Date.now();
-  if (pageArrivalTime > 0 && wordsPerPage > 0 && !loggedPages.has(currentPage)
-      && (now - pageArrivalTime) >= MIN_PAGE_TIME) {
-    loggedPages.add(currentPage);
-    logWordsRead(wordsPerPage, currentIndex, currentPage);
-  }
+  maybeLogCurrentPageRead();
   currentPage = n;
   pageArrivalTime = now;
   saveProgress();
@@ -1812,6 +1818,18 @@ const summaryBarObserver = new ResizeObserver(() => {
   }, 150);
 });
 summaryBarObserver.observe(document.getElementById('page-summary-bar'));
+
+setInterval(() => {
+  maybeLogCurrentPageRead();
+}, PAGE_LOG_CHECK_INTERVAL);
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') maybeLogCurrentPageRead();
+});
+
+window.addEventListener('pagehide', () => {
+  maybeLogCurrentPageRead();
+});
 
 // ── Click zones (left 30% = prev, right 30% = next) ──
 document.getElementById('text-column').addEventListener('click', e => {
