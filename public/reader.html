@@ -658,6 +658,7 @@
       display: none;
       box-shadow: var(--shadow-lg);
       transform: translateX(-50%);
+      overflow: hidden;
     }
     #word-popup.visible { display: block; }
     #word-popup .popup-close {
@@ -755,15 +756,7 @@
     #word-popup .popup-btn.primary:active { background: var(--purple); }
     /* Arrow pointing down to word */
     #word-popup::after {
-      content: '';
-      position: absolute;
-      bottom: -7px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 0; height: 0;
-      border-left: 7px solid transparent;
-      border-right: 7px solid transparent;
-      border-top: 7px solid var(--border-strong);
+      display: none;
     }
 
     /* Sentence translate */
@@ -1174,6 +1167,6 @@
       <button class="popup-btn primary" id="popup-more-btn">Details →</button>
     </div>
   </div>
-  <script src="reader.js?v=4.95"></script>
+  <script src="reader.js?v=4.96"></script>
 </body>
 </html>
