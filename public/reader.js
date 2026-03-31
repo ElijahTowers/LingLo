@@ -1343,12 +1343,11 @@ document.getElementById('popup-speak-btn').addEventListener('click', (e) => {
   if (currentWord) speak(currentWord);
 });
 
-document.getElementById('popup-more-btn').addEventListener('click', (e) => {
-  e.stopPropagation();
-  hidePopup(true); // keep the existing history entry; openSidebar will reuse it
-  openSidebar();
+function populateSidebarFromCurrentSelection() {
+  if (!currentWord) return;
   showTab('translate');
   showWordView(currentWord, currentSentence);
+
   // Put translation into sidebar if we already have it
   const transEl = document.getElementById('sidebar-translation');
   if (currentTranslation) {
@@ -1356,21 +1355,51 @@ document.getElementById('popup-more-btn').addEventListener('click', (e) => {
     transEl.className = 'sidebar-translation';
     updateSaveBtn(currentWord);
     loadAlternativeMeanings(currentWord, currentSentence, currentTranslation);
+  } else {
+    transEl.textContent = 'Translating…';
+    transEl.className = 'sidebar-translation loading';
+    fetch('/api/translate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: currentWord, sentence: currentSentence })
+    }).then(async res => {
+      if (!res.ok) throw new Error();
+      transEl.textContent = '';
+      transEl.className = 'sidebar-translation';
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        transEl.textContent += decoder.decode(value, { stream: true });
+      }
+      currentTranslation = transEl.textContent.trim();
+      updateSaveBtn(currentWord);
+      loadAlternativeMeanings(currentWord, currentSentence, currentTranslation);
+    }).catch(() => {
+      transEl.textContent = 'Translation failed';
+      transEl.className = 'sidebar-translation';
+    });
   }
 
-  // Copy sentence translation from popup if already loaded, else trigger it
-  const popupSentEl = document.getElementById('popup-sentence-translation');
   const sentTransEl = document.getElementById('sentence-translation');
-  if (popupSentEl.innerHTML.trim()) {
-    sentTransEl.innerHTML = popupSentEl.innerHTML;
-    sentTransEl.classList.add('visible');
-  } else if (currentSentence) {
+  if (currentSentence) {
     sentTransEl.innerHTML = '';
     sentTransEl.classList.add('visible');
     fetchSentenceTranslation(currentWord, currentSentence)
       .then(result => { sentTransEl.innerHTML = hlToHtml(result); scheduleTranslateScrollHintUpdate(); })
       .catch(() => { sentTransEl.innerHTML = ''; sentTransEl.classList.remove('visible'); });
+  } else {
+    sentTransEl.innerHTML = '';
+    sentTransEl.classList.remove('visible');
   }
+}
+
+document.getElementById('popup-more-btn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  hidePopup(true); // keep the existing history entry; openSidebar will reuse it
+  openSidebar();
+  populateSidebarFromCurrentSelection();
 });
 
 // Dismiss popup on tap outside
@@ -1381,6 +1410,8 @@ document.addEventListener('touchstart', (e) => {
 }, { passive: true });
 
 function openSidebar() {
+  const shouldTransferPopupSelection = wordPopup.classList.contains('visible') && !!currentWord;
+  if (shouldTransferPopupSelection) hidePopup(true);
   sidebarOpen = true;
   document.getElementById('sidebar').classList.remove('closed');
   document.getElementById('sidebar-toggle').classList.add('active');
@@ -1395,6 +1426,7 @@ function openSidebar() {
       setupPagination(ratio, true);
     }, 270);
   }
+  if (shouldTransferPopupSelection) populateSidebarFromCurrentSelection();
   scheduleTranslateScrollHintUpdate();
 }
 function closeSidebar(fromPopstate = false) {
