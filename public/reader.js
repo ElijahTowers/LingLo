@@ -248,6 +248,7 @@ let paginationTimer = null;
 let pageArrivalTime = 0;
 const MIN_PAGE_TIME = 12000; // 12 s on a page before its words count
 const PAGE_LOG_CHECK_INTERVAL = 4000;
+let inlineSelectionPendingSidebar = false;
 
 // ── Progress persistence ──
 function updateProgressUrl(chapter, ratio) {
@@ -804,6 +805,7 @@ document.getElementById('content').addEventListener('click', async e => {
     activeWordEl = null;
     currentWord = '';
     currentTranslation = '';
+    inlineSelectionPendingSidebar = false;
     hidePopup();
     return;
   }
@@ -996,6 +998,7 @@ function clearWordView() {
   clearDragSel();
   currentWord = '';
   currentTranslation = '';
+  inlineSelectionPendingSidebar = false;
   scheduleTranslateScrollHintUpdate();
 }
 
@@ -1300,6 +1303,7 @@ function showPopup(word, anchorEl) {
   popupTranslation.className = 'popup-translation loading';
   resetBookFrequency();
   updatePopupSaveBtn(word);
+  inlineSelectionPendingSidebar = true;
   document.getElementById('popup-rarity').innerHTML = '';
   const pst = document.getElementById('popup-sentence-translation');
   pst.textContent = '';
@@ -1345,6 +1349,7 @@ document.getElementById('popup-speak-btn').addEventListener('click', (e) => {
 
 function populateSidebarFromCurrentSelection() {
   if (!currentWord) return;
+  inlineSelectionPendingSidebar = false;
   showTab('translate');
   showWordView(currentWord, currentSentence);
 
@@ -1410,7 +1415,7 @@ document.addEventListener('touchstart', (e) => {
 }, { passive: true });
 
 function openSidebar() {
-  const shouldTransferPopupSelection = wordPopup.classList.contains('visible') && !!currentWord;
+  const shouldTransferPopupSelection = !!currentWord && (wordPopup.classList.contains('visible') || inlineSelectionPendingSidebar);
   if (shouldTransferPopupSelection) hidePopup(true);
   sidebarOpen = true;
   document.getElementById('sidebar').classList.remove('closed');
