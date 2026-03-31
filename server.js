@@ -1,5 +1,5 @@
 require('dotenv').config();
-const APP_VERSION = 'v4.98';
+const APP_VERSION = 'v4.99';
 const express = require('express');
 const crypto = require('crypto');
 const multer = require('multer');
@@ -339,8 +339,34 @@ function extractContextualFocus(word, sentence) {
   return word;
 }
 
-async function translateSingleWordInContext(word, sentence) {
+async function translateSingleWordInContext(word, sentence, sentenceTranslation = '') {
   const focus = extractContextualFocus(word, sentence);
+  if (sentenceTranslation) {
+    const alignedPrompt = `The user clicked the single Spanish word "${word}" in this sentence:
+"${sentence}"
+
+Here is a natural English translation of the whole sentence:
+"${sentenceTranslation}"
+
+Use the Spanish sentence and this English sentence translation together.
+
+Reply ONLY with the smallest English word or short phrase from that English sentence that best matches the clicked Spanish word in context.
+
+Rules:
+- Prefer the wording already used in the English sentence
+- Maximum 3 English words
+- No explanations
+- No punctuation
+- No quotes
+
+Good examples:
+- "trepidantes" in "quince minutos trepidantes" with English "fifteen intense minutes" -> "intense"
+- "llamadas" with English "important phone calls" -> "phone calls"
+- "dirigió" with English "headed for the platforms" -> "headed"`;
+    let aligned = await aiGenerateText(alignedPrompt);
+    if (countWordTokens(aligned) <= 3) return aligned.trim();
+  }
+
   const basePrompt = `The user clicked the single Spanish word "${word}" in this sentence:
 "${sentence}"
 
@@ -1221,7 +1247,10 @@ Examples:
       return res.end(withHighlight(sentenceTranslation, focusTranslation));
     } else if (singleWordSelection && sentence && sentence !== trimmedText) {
       res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-      return res.end(await translateSingleWordInContext(trimmedText, sentence));
+      const sentenceTranslation = await aiGenerateText(
+        `Translate the following Spanish sentence to natural English. Reply ONLY with the translated English sentence, nothing else.\n\nSentence: "${sentence}"`
+      );
+      return res.end(await translateSingleWordInContext(trimmedText, sentence, sentenceTranslation));
     } else if (type === 'context-sentence') {
       prompt = `Translate the following Spanish sentence to English. Reply ONLY with the translated English sentence, nothing else. Sentence: "${trimmedText}"`;
     } else {
