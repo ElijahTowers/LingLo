@@ -658,16 +658,6 @@ async function activatePhrase(selected, startSpan) {
       popupTranslation.textContent = 'Translation failed';
       popupTranslation.className = 'popup-translation';
     }
-    // Auto-translate context sentence
-    if (currentSentence) {
-      fetchSentenceTranslation(text, currentSentence)
-        .then(result => {
-          popupSentTrans.innerHTML = hlToHtml(result);
-          popupSentTrans.classList.add('visible');
-          positionPopup(startSpan);
-          scheduleTranslateScrollHintUpdate();
-        }).catch(() => {});
-    }
   } else {
     if (!sidebarOpen) openSidebar();
     showTab('translate');
@@ -1308,11 +1298,6 @@ function showPopup(word, anchorEl) {
   wordPopup.classList.add('visible');
   positionPopup(anchorEl);
   if (isMobile()) _pushOverlayHistory();
-  loadBookFrequency(word).finally(() => positionPopup(anchorEl));
-  fetchRarity([word]).then(([zipf]) => {
-    document.getElementById('popup-rarity').innerHTML = rarityBadge(zipf);
-    positionPopup(anchorEl); // reposition after badge may change popup height
-  });
 }
 
 function positionPopup(anchorEl) {
