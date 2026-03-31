@@ -403,6 +403,7 @@ async function loadSavedWords() {
   const words = await res.json();
   savedWords.clear();
   words.forEach(w => savedWords.set(w.word.toLowerCase(), { id: w.id, translation: w.translation }));
+  refreshSavedMarks();
 }
 
 async function loadChapters() {
@@ -443,7 +444,7 @@ async function loadChapter(index, goToLast = false, initRatio = 0) {
   content.innerHTML = data.html;
 
   wrapWords(content);
-  markSavedWords(content);
+  refreshSavedMarks();
   updateNav();
   setupPagination(goToLast ? 1 : initRatio);
 }
@@ -511,11 +512,51 @@ function normalizeSearchText(text) {
 }
 
 function markSavedWords(container) {
-  container.querySelectorAll('.word').forEach(span => {
-    if (savedWords.has(cleanWord(span.textContent).toLowerCase())) {
-      span.classList.add('saved');
-    }
+  const spans = [...container.querySelectorAll('.word')];
+  const normalizedSpans = spans.map(span => cleanWord(span.textContent).toLowerCase());
+  const savedEntries = [...savedWords.keys()]
+    .map(key => ({ key, parts: key.split(/\s+/).filter(Boolean) }))
+    .sort((a, b) => b.parts.length - a.parts.length);
+
+  spans.forEach(span => {
+    span.classList.remove('saved');
+    delete span.dataset.savedKey;
   });
+
+  for (const entry of savedEntries) {
+    if (!entry.parts.length) continue;
+    if (entry.parts.length === 1) {
+      spans.forEach((span, index) => {
+        if (normalizedSpans[index] === entry.key) {
+          span.classList.add('saved');
+          if (!span.dataset.savedKey) span.dataset.savedKey = entry.key;
+        }
+      });
+      continue;
+    }
+
+    for (let start = 0; start <= spans.length - entry.parts.length; start++) {
+      let matches = true;
+      for (let offset = 0; offset < entry.parts.length; offset++) {
+        if (normalizedSpans[start + offset] !== entry.parts[offset]) {
+          matches = false;
+          break;
+        }
+      }
+      if (!matches) continue;
+      for (let offset = 0; offset < entry.parts.length; offset++) {
+        const span = spans[start + offset];
+        span.classList.add('saved');
+        span.dataset.savedKey = entry.key;
+      }
+    }
+  }
+}
+
+function refreshSavedMarks() {
+  const content = document.getElementById('content');
+  if (!content) return;
+  markSavedWords(content);
 }
 
 function getSentence(wordSpan) {
@@ -992,11 +1033,7 @@ async function loadAlternativeMeanings(text, sentence, primaryMeaning) {
 async function removeSavedWord(id, word) {
   await fetch(`/api/words/${id}`, { method: 'DELETE' });
   savedWords.delete(word.toLowerCase());
-  document.querySelectorAll('#content .word.saved').forEach(span => {
-    if (cleanWord(span.textContent).toLowerCase() === word.toLowerCase()) {
-      span.classList.remove('saved');
-    }
-  });
+  refreshSavedMarks();
   if (currentWord && currentWord.toLowerCase() === word.toLowerCase()) updateSaveBtn(currentWord);
   updateWordsTabCount();
   updateReencounterNote();
@@ -1025,7 +1062,7 @@ async function toggleSaveCurrentWord() {
   const data = await res.json();
   savedWords.set(currentWord.toLowerCase(), { id: data.id, translation: currentTranslation });
 
-  if (activeWordEl) activeWordEl.classList.add('saved');
+  refreshSavedMarks();
   updateSaveBtn(currentWord);
   updateWordsTabCount();
   updateReencounterNote();
@@ -1390,7 +1427,7 @@ document.getElementById('content').addEventListener('mouseover', e => {
   if (isDragging) return;
   const span = e.target.closest('.word.saved');
   if (!span) return;
-  const entry = savedWords.get(cleanWord(span.textContent).toLowerCase());
+  const entry = savedWords.get(span.dataset.savedKey || cleanWord(span.textContent).toLowerCase());
   if (!entry?.translation) return;
   const rect = span.getBoundingClientRect();
   tooltip.textContent = entry.translation;
