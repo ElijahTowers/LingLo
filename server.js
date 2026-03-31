@@ -1,5 +1,5 @@
 require('dotenv').config();
-const APP_VERSION = 'v4.99';
+const APP_VERSION = 'v5.00';
 const express = require('express');
 const crypto = require('crypto');
 const multer = require('multer');
@@ -81,9 +81,19 @@ db.exec(`
     PRIMARY KEY (read_date, book_id, chapter_index, page_number),
     FOREIGN KEY (book_id) REFERENCES books(id)
   );
+  CREATE TABLE IF NOT EXISTS saved_item_encounters (
+    book_id INTEGER NOT NULL,
+    chapter_index INTEGER NOT NULL,
+    page_number INTEGER NOT NULL,
+    word_key TEXT NOT NULL,
+    encountered_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (book_id, chapter_index, page_number, word_key),
+    FOREIGN KEY (book_id) REFERENCES books(id)
+  );
   CREATE INDEX IF NOT EXISTS idx_book_lemma_counts_book_id ON book_lemma_counts(book_id);
   CREATE INDEX IF NOT EXISTS idx_book_surface_counts_book_id ON book_surface_counts(book_id);
   CREATE INDEX IF NOT EXISTS idx_reading_pages_read_date ON reading_pages(read_date);
+  CREATE INDEX IF NOT EXISTS idx_saved_item_encounters_lookup ON saved_item_encounters(book_id, word_key);
 `);
 
 // ── Auth ──
@@ -1022,12 +1032,27 @@ app.post('/api/reading-event', (req, res) => {
   const book = db.prepare('SELECT id FROM books WHERE id = ?').get(bookId);
   if (!book) return res.status(404).json({ error: 'Book not found' });
 
+  const savedKeys = Array.isArray(req.body.savedKeys)
+    ? [...new Set(req.body.savedKeys
+      .map(key => String(key || '').trim().toLowerCase())
+      .filter(Boolean)
+      .slice(0, 50))]
+    : [];
+
   const today = localDateString();
   db.prepare(
     `INSERT OR IGNORE INTO reading_pages
      (read_date, book_id, chapter_index, page_number, words_read)
      VALUES (?, ?, ?, ?, ?)`
   ).run(today, bookId, chapterIndex, pageNumber, wordsRead);
+  if (savedKeys.length) {
+    const insertEncounter = db.prepare(
+      `INSERT OR IGNORE INTO saved_item_encounters
+       (book_id, chapter_index, page_number, word_key)
+       VALUES (?, ?, ?, ?)`
+    );
+    for (const key of savedKeys) insertEncounter.run(bookId, chapterIndex, pageNumber, key);
+  }
 
   res.json(computeServerStreakStats());
 });
@@ -1183,9 +1208,13 @@ app.post('/api/books/:id/frequency', async (req, res) => {
       const normalizedPhrase = normalizeTextForPhraseSearch(text);
       const chapters = db.prepare('SELECT normalized_text FROM book_chapter_cache WHERE book_id = ? ORDER BY chapter_index').all(book.id);
       const count = chapters.reduce((sum, chapter) => sum + countPhraseOccurrences(chapter.normalized_text, normalizedPhrase), 0);
+      const encounterCount = db.prepare(
+        'SELECT COUNT(*) AS total FROM saved_item_encounters WHERE book_id = ? AND word_key = ?'
+      ).get(book.id, text.trim().toLowerCase()).total || 0;
       return res.json({
         type: 'phrase',
         count,
+        encounterCount,
         normalizedPhrase,
         freshlyAnalyzed: analysis?.freshlyAnalyzed || false,
         analyzedAt: analysis?.analyzedAt || null
@@ -1200,6 +1229,9 @@ app.post('/api/books/:id/frequency', async (req, res) => {
     const lemmaRow = db.prepare(
       'SELECT count, sample FROM book_lemma_counts WHERE book_id = ? AND lemma_key = ?'
     ).get(book.id, lemmaKey);
+    const encounterCount = db.prepare(
+      'SELECT COUNT(*) AS total FROM saved_item_encounters WHERE book_id = ? AND word_key = ?'
+    ).get(book.id, text.trim().toLowerCase()).total || 0;
 
     res.json({
       type: 'word',
@@ -1208,6 +1240,7 @@ app.post('/api/books/:id/frequency', async (req, res) => {
       lemmaCount: lemmaRow?.count || 0,
       lemmaKey,
       sample: lemmaRow?.sample || tokens[0],
+      encounterCount,
       freshlyAnalyzed: analysis?.freshlyAnalyzed || false,
       analyzedAt: analysis?.analyzedAt || null
     });

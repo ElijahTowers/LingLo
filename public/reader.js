@@ -35,6 +35,8 @@ const regionalUsageCache = new Map();
 let activeFrequencyRequest = '';
 let readerStreakPopoverBound = false;
 let activeFrequencyResult = null;
+let currentAlternativeMeanings = [];
+let currentSentenceTranslationText = '';
 async function fetchRarity(words) {
   const needed = words.filter(w => !rarityCache.has(w));
   if (needed.length > 0) {
@@ -141,20 +143,64 @@ function updateReencounterNote() {
     return;
   }
 
-  const count = activeFrequencyResult.count;
+  const count = activeFrequencyResult.encounterCount || 0;
   let body = '';
-  if (count >= 12) {
-    body = `You saved this ${activeFrequencyResult.type} and it keeps coming back here: ${count} times in this book. Strong review candidate.`;
-  } else if (count >= 5) {
-    body = `You saved this ${activeFrequencyResult.type} and you have already run into it ${count} times in this book. Nice one to keep noticing in context.`;
+  if (count >= 8) {
+    body = `You have actually re-encountered this saved ${activeFrequencyResult.type} on ${count} tracked pages. Strong review candidate.`;
+  } else if (count >= 4) {
+    body = `You have re-encountered this saved ${activeFrequencyResult.type} on ${count} tracked pages. It is clearly coming back in your real reading.`;
   } else if (count >= 2) {
-    body = `You saved this ${activeFrequencyResult.type} and it has already reappeared ${count} times in this book. Keep an eye on it while you read.`;
+    body = `You have already re-encountered this saved ${activeFrequencyResult.type} on ${count} tracked pages. Good one to keep noticing.`;
   } else {
-    body = `You saved this ${activeFrequencyResult.type}. It has only shown up once so far in this book, so keep it on your radar.`;
+    body = `You saved this ${activeFrequencyResult.type}, but LingLo has not tracked a real re-encounter yet. Keep reading until it comes back naturally.`;
   }
   note.innerHTML = `<strong>Saved Re-encounter</strong>${escapeHtml(body)}`;
   note.classList.add('visible');
   scheduleTranslateScrollHintUpdate();
+}
+
+function renderAlternativeMeanings(meanings) {
+  const wrap = document.getElementById('alt-meanings-wrap');
+  const list = document.getElementById('alt-meanings');
+  currentAlternativeMeanings = meanings.slice(0, 3);
+  if (!currentAlternativeMeanings.length) {
+    wrap.classList.remove('visible');
+    list.innerHTML = '';
+    return;
+  }
+  list.innerHTML = currentAlternativeMeanings
+    .map(line => `<div class="alt-meaning-item">${escapeHtml(line)}</div>`)
+    .join('');
+  wrap.classList.add('visible');
+}
+
+function normalizeMeaningMatch(text) {
+  return normalizeMeaning((text || '').replace(/\[HL\]|\[\/HL\]/g, ''))
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function sentenceIncludesMeaning(sentenceText, meaning) {
+  const sentence = ` ${normalizeMeaningMatch(sentenceText)} `;
+  const candidate = normalizeMeaningMatch(meaning);
+  if (!sentence.trim() || !candidate) return false;
+  return sentence.includes(` ${candidate} `);
+}
+
+function maybeReconcileMeaningHere() {
+  if (!currentTranslation || !currentSentenceTranslationText || !currentAlternativeMeanings.length) return;
+  if (sentenceIncludesMeaning(currentSentenceTranslationText, currentTranslation)) return;
+  const matching = currentAlternativeMeanings.filter(line => sentenceIncludesMeaning(currentSentenceTranslationText, line));
+  if (matching.length !== 1) return;
+
+  const better = matching[0];
+  const previous = currentTranslation;
+  currentTranslation = better;
+  document.getElementById('sidebar-translation').textContent = better;
+  const nextMeanings = [previous, ...currentAlternativeMeanings.filter(line => normalizeMeaning(line) !== normalizeMeaning(better))]
+    .filter((line, index, arr) => line && arr.findIndex(other => normalizeMeaning(other) === normalizeMeaning(line)) === index)
+    .slice(0, 3);
+  renderAlternativeMeanings(nextMeanings);
 }
 
 async function loadBookFrequency(text) {
@@ -520,7 +566,7 @@ function markSavedWords(container) {
     .sort((a, b) => b.parts.length - a.parts.length);
 
   spans.forEach(span => {
-    span.classList.remove('saved');
+    span.classList.remove('saved', 'saved-word', 'saved-phrase', 'saved-phrase-start', 'saved-phrase-end');
     delete span.dataset.savedKey;
   });
 
@@ -529,7 +575,7 @@ function markSavedWords(container) {
     if (entry.parts.length === 1) {
       spans.forEach((span, index) => {
         if (normalizedSpans[index] === entry.key) {
-          span.classList.add('saved');
+          span.classList.add('saved', 'saved-word');
           if (!span.dataset.savedKey) span.dataset.savedKey = entry.key;
         }
       });
@@ -547,7 +593,9 @@ function markSavedWords(container) {
       if (!matches) continue;
       for (let offset = 0; offset < entry.parts.length; offset++) {
         const span = spans[start + offset];
-        span.classList.add('saved');
+        span.classList.add('saved', 'saved-phrase');
+        if (offset === 0) span.classList.add('saved-phrase-start');
+        if (offset === entry.parts.length - 1) span.classList.add('saved-phrase-end');
         span.dataset.savedKey = entry.key;
       }
     }
@@ -697,7 +745,12 @@ async function activatePhrase(selected, startSpan) {
       sentTransEl.innerHTML = '';
       sentTransEl.classList.add('visible');
       fetchSentenceTranslation(text, currentSentence)
-        .then(result => { sentTransEl.innerHTML = hlToHtml(result); scheduleTranslateScrollHintUpdate(); })
+        .then(result => {
+          currentSentenceTranslationText = result;
+          sentTransEl.innerHTML = hlToHtml(result);
+          maybeReconcileMeaningHere();
+          scheduleTranslateScrollHintUpdate();
+        })
         .catch(() => { sentTransEl.innerHTML = ''; sentTransEl.classList.remove('visible'); });
     }
   }
@@ -902,7 +955,12 @@ document.getElementById('content').addEventListener('click', async e => {
       sentTransEl.innerHTML = '';
       sentTransEl.classList.add('visible');
       fetchSentenceTranslation(word, currentSentence)
-        .then(result => { sentTransEl.innerHTML = hlToHtml(result); scheduleTranslateScrollHintUpdate(); })
+        .then(result => {
+          currentSentenceTranslationText = result;
+          sentTransEl.innerHTML = hlToHtml(result);
+          maybeReconcileMeaningHere();
+          scheduleTranslateScrollHintUpdate();
+        })
         .catch(() => { sentTransEl.innerHTML = ''; sentTransEl.classList.remove('visible'); });
     }
   }
@@ -926,6 +984,8 @@ function showWordView(word, sentence) {
   document.getElementById('sidebar-translation').className = 'sidebar-translation';
   document.getElementById('alt-meanings').innerHTML = '';
   document.getElementById('alt-meanings-wrap').classList.remove('visible');
+  currentAlternativeMeanings = [];
+  currentSentenceTranslationText = '';
   scheduleTranslateScrollHintUpdate();
 
   // Sentence with highlight
@@ -993,6 +1053,8 @@ function clearWordView() {
   document.getElementById('sentence-translation').classList.remove('visible');
   document.getElementById('alt-meanings').innerHTML = '';
   document.getElementById('alt-meanings-wrap').classList.remove('visible');
+  currentAlternativeMeanings = [];
+  currentSentenceTranslationText = '';
   updateReencounterNote();
   if (activeWordEl) { activeWordEl.classList.remove('active'); activeWordEl = null; }
   clearDragSel();
@@ -1033,6 +1095,7 @@ function updateSaveBtn(word) {
 async function loadAlternativeMeanings(text, sentence, primaryMeaning) {
   const wrap = document.getElementById('alt-meanings-wrap');
   const list = document.getElementById('alt-meanings');
+  currentAlternativeMeanings = [];
   wrap.classList.remove('visible');
   list.innerHTML = '';
   try {
@@ -1053,8 +1116,8 @@ async function loadAlternativeMeanings(text, sentence, primaryMeaning) {
       .filter(line => normalizeMeaning(line) !== primaryNorm)
       .slice(0, 3);
     if (!meanings.length) return;
-    list.innerHTML = meanings.map(line => `<div class="alt-meaning-item">${escapeHtml(line)}</div>`).join('');
-    wrap.classList.add('visible');
+    renderAlternativeMeanings(meanings);
+    maybeReconcileMeaningHere();
     scheduleTranslateScrollHintUpdate();
   } catch {}
 }
@@ -1392,7 +1455,12 @@ function populateSidebarFromCurrentSelection() {
     sentTransEl.innerHTML = '';
     sentTransEl.classList.add('visible');
     fetchSentenceTranslation(currentWord, currentSentence)
-      .then(result => { sentTransEl.innerHTML = hlToHtml(result); scheduleTranslateScrollHintUpdate(); })
+      .then(result => {
+        currentSentenceTranslationText = result;
+        sentTransEl.innerHTML = hlToHtml(result);
+        maybeReconcileMeaningHere();
+        scheduleTranslateScrollHintUpdate();
+      })
       .catch(() => { sentTransEl.innerHTML = ''; sentTransEl.classList.remove('visible'); });
   } else {
     sentTransEl.innerHTML = '';
@@ -1710,6 +1778,19 @@ window.addEventListener('resize', () => {
 // ── Reading stats ──
 let streakStats = { dailyWords: 0, streak: 0, goal: 500, goalMet: false };
 
+function getSavedKeysForPage(pageNumber) {
+  if (pageNumber < 0 || pageWidth <= 0) return [];
+  const pageStart = pageNumber * pageWidth;
+  const pageEnd = pageStart + pageWidth;
+  const keys = new Set();
+  document.querySelectorAll('#content .word.saved').forEach(span => {
+    if (span.offsetLeft < pageStart || span.offsetLeft >= pageEnd) return;
+    const savedKey = span.dataset.savedKey || cleanWord(span.textContent).toLowerCase();
+    if (savedKey) keys.add(savedKey);
+  });
+  return [...keys];
+}
+
 async function refreshStreakStats() {
   try {
     const res = await fetch('/api/streak');
@@ -1729,7 +1810,8 @@ async function logWordsRead(count, chapterIndex, pageNumber) {
         bookId: parseInt(bookId, 10),
         chapterIndex,
         pageNumber,
-        wordsRead: count
+        wordsRead: count,
+        savedKeys: getSavedKeysForPage(pageNumber)
       })
     });
     if (!res.ok) throw new Error();
