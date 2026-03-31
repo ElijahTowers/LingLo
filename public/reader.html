@@ -650,10 +650,10 @@
       position: fixed;
       background: var(--surface2);
       border: 1px solid var(--border-strong);
-      border-radius: 14px;
-      padding: 14px 16px 12px;
-      min-width: 180px;
-      max-width: min(300px, 88vw);
+      border-radius: 10px;
+      padding: 8px 10px;
+      min-width: 0;
+      max-width: min(180px, 62vw);
       z-index: 450;
       display: none;
       box-shadow: var(--shadow-lg);
@@ -675,7 +675,7 @@
       cursor: pointer;
       display: none;
     }
-    #popup-rarity { margin-bottom: 6px; }
+    #popup-rarity { display: none !important; }
     #word-popup .popup-frequency {
       display: none !important;
       margin-bottom: 8px;
@@ -705,10 +705,10 @@
       display: none;
     }
     #word-popup .popup-translation {
-      font-size: 0.9rem;
+      font-size: 0.82rem;
       color: var(--purple);
-      min-height: 18px;
-      line-height: 1.4;
+      min-height: 0;
+      line-height: 1.25;
       word-break: break-word;
     }
     #word-popup .popup-translation.loading {
@@ -721,7 +721,7 @@
       line-height: 1.4;
       margin-top: 5px;
       font-style: italic;
-      display: none;
+      display: none !important;
     }
     #word-popup .popup-sentence-translation.visible { display: block; }
     #word-popup .popup-actions {
@@ -1174,6 +1174,6 @@
       <button class="popup-btn primary" id="popup-more-btn">Details →</button>
     </div>
   </div>
-  <script src="reader.js?v=4.94"></script>
+  <script src="reader.js?v=4.95"></script>
 </body>
 </html>
