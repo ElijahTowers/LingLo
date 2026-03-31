@@ -799,6 +799,15 @@ document.getElementById('content').addEventListener('click', async e => {
   const word = savedPhraseEntry?.word || clickedWord;
   const savedTranslation = savedPhraseEntry?.translation || '';
 
+  if (wordPopup.classList.contains('visible') && activeWordEl === span && currentWord.toLowerCase() === word.toLowerCase()) {
+    span.classList.remove('active');
+    activeWordEl = null;
+    currentWord = '';
+    currentTranslation = '';
+    hidePopup();
+    return;
+  }
+
   // Deactivate previous
   if (activeWordEl) activeWordEl.classList.remove('active');
   activeWordEl = span;
@@ -1286,7 +1295,7 @@ function _popOverlayHistory(fromPopstate) {
 }
 
 function showPopup(word, anchorEl) {
-  popupWord.textContent = word;
+  popupWord.textContent = '';
   popupTranslation.textContent = 'Translating…';
   popupTranslation.className = 'popup-translation loading';
   resetBookFrequency();
