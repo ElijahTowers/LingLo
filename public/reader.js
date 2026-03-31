@@ -402,7 +402,7 @@ async function loadSavedWords() {
   const res = await fetch('/api/words');
   const words = await res.json();
   savedWords.clear();
-  words.forEach(w => savedWords.set(w.word.toLowerCase(), { id: w.id, translation: w.translation }));
+  words.forEach(w => savedWords.set(w.word.toLowerCase(), { id: w.id, word: w.word, translation: w.translation }));
   refreshSavedMarks();
 }
 
@@ -557,6 +557,15 @@ function refreshSavedMarks() {
   const content = document.getElementById('content');
   if (!content) return;
   markSavedWords(content);
+}
+
+function getSavedPhraseEntryFromSpan(span) {
+  const savedKey = span?.dataset.savedKey;
+  if (!savedKey) return null;
+  const entry = savedWords.get(savedKey);
+  if (!entry) return null;
+  const savedText = entry.word || savedKey;
+  return isPhrase(savedText) ? entry : null;
 }
 
 function getSentence(wordSpan) {
@@ -794,8 +803,11 @@ document.getElementById('content').addEventListener('click', async e => {
   e.stopPropagation();
 
   const raw = span.textContent;
-  const word = cleanWord(raw);
-  if (!word) return;
+  const clickedWord = cleanWord(raw);
+  if (!clickedWord) return;
+  const savedPhraseEntry = getSavedPhraseEntryFromSpan(span);
+  const word = savedPhraseEntry?.word || clickedWord;
+  const savedTranslation = savedPhraseEntry?.translation || '';
 
   // Deactivate previous
   if (activeWordEl) activeWordEl.classList.remove('active');
@@ -811,29 +823,37 @@ document.getElementById('content').addEventListener('click', async e => {
     // Mobile and tablet touch: show inline popup, leave sidebar closed
     showPopup(word, span);
     speak(word);
-    try {
-      const res = await fetch('/api/translate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: word, sentence: currentSentence })
-      });
-      if (!res.ok) throw new Error();
-      popupTranslation.textContent = '';
+    if (savedTranslation) {
+      popupTranslation.textContent = savedTranslation;
       popupTranslation.className = 'popup-translation';
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        popupTranslation.textContent += decoder.decode(value, { stream: true });
-      }
-      currentTranslation = popupTranslation.textContent.trim();
+      currentTranslation = savedTranslation;
       updateSaveBtn(word);
-      // Re-position after content has rendered and height is known
       if (activeWordEl) positionPopup(activeWordEl);
-    } catch {
-      popupTranslation.textContent = 'Translation failed';
-      popupTranslation.className = 'popup-translation';
+    } else {
+      try {
+        const res = await fetch('/api/translate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: word, sentence: currentSentence })
+        });
+        if (!res.ok) throw new Error();
+        popupTranslation.textContent = '';
+        popupTranslation.className = 'popup-translation';
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          popupTranslation.textContent += decoder.decode(value, { stream: true });
+        }
+        currentTranslation = popupTranslation.textContent.trim();
+        updateSaveBtn(word);
+        // Re-position after content has rendered and height is known
+        if (activeWordEl) positionPopup(activeWordEl);
+      } catch {
+        popupTranslation.textContent = 'Translation failed';
+        popupTranslation.className = 'popup-translation';
+      }
     }
   } else {
     // Desktop: open sidebar as before
@@ -842,29 +862,36 @@ document.getElementById('content').addEventListener('click', async e => {
     showWordView(word, currentSentence);
     speak(word);
     const transEl = document.getElementById('sidebar-translation');
-    transEl.textContent = 'Translating…';
-    transEl.className = 'sidebar-translation loading';
-    try {
-      const res = await fetch('/api/translate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: word, sentence: currentSentence })
-      });
-      if (!res.ok) throw new Error();
-      transEl.textContent = '';
+    if (savedTranslation) {
+      transEl.textContent = savedTranslation;
       transEl.className = 'sidebar-translation';
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        transEl.textContent += decoder.decode(value, { stream: true });
-      }
-      currentTranslation = transEl.textContent.trim();
+      currentTranslation = savedTranslation;
       loadAlternativeMeanings(word, currentSentence, currentTranslation);
-    } catch {
-      transEl.textContent = 'Translation failed';
-      transEl.className = 'sidebar-translation';
+    } else {
+      transEl.textContent = 'Translating…';
+      transEl.className = 'sidebar-translation loading';
+      try {
+        const res = await fetch('/api/translate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: word, sentence: currentSentence })
+        });
+        if (!res.ok) throw new Error();
+        transEl.textContent = '';
+        transEl.className = 'sidebar-translation';
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          transEl.textContent += decoder.decode(value, { stream: true });
+        }
+        currentTranslation = transEl.textContent.trim();
+        loadAlternativeMeanings(word, currentSentence, currentTranslation);
+      } catch {
+        transEl.textContent = 'Translation failed';
+        transEl.className = 'sidebar-translation';
+      }
     }
     updateSaveBtn(word);
 
@@ -1060,7 +1087,7 @@ async function toggleSaveCurrentWord() {
     })
   });
   const data = await res.json();
-  savedWords.set(currentWord.toLowerCase(), { id: data.id, translation: currentTranslation });
+  savedWords.set(currentWord.toLowerCase(), { id: data.id, word: currentWord, translation: currentTranslation });
 
   refreshSavedMarks();
   updateSaveBtn(currentWord);
