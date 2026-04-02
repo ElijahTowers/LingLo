@@ -497,6 +497,39 @@ async function loadChapter(index, goToLast = false, initRatio = 0) {
 }
 
 // ── Word wrapping ──
+/** Consume letters/digits plus internal apostrophe or hyphen between word parts (don't, l'homme, word–word). */
+function consumeWordCore(s, start) {
+  let i = start;
+  const n = s.length;
+  while (i < n) {
+    const c = s[i];
+    if (/\p{L}|\p{N}/u.test(c)) {
+      i++;
+      continue;
+    }
+    if ((c === "'" || c === '\u2019') && i + 1 < n && /\p{L}|\p{N}/u.test(s[i + 1])) {
+      i++;
+      continue;
+    }
+    if ((c === '-' || c === '\u2013' || c === '\u2014') && i + 1 < n && /\p{L}|\p{N}/u.test(s[i + 1])) {
+      i++;
+      continue;
+    }
+    break;
+  }
+  return i;
+}
+
+function splitWordTokenIntoParts(token) {
+  let i = 0;
+  const n = token.length;
+  while (i < n && !/\p{L}|\p{N}/u.test(token[i])) i++;
+  if (i >= n) return { lead: token, core: '', trail: '' };
+  const start = i;
+  i = consumeWordCore(token, start);
+  return { lead: token.slice(0, start), core: token.slice(start, i), trail: token.slice(i) };
+}
+
 function wrapWords(container) {
   const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
     acceptNode(node) {
@@ -518,10 +551,15 @@ function wrapWords(container) {
       if (/^\s+$/.test(part)) {
         frag.appendChild(document.createTextNode(part));
       } else if (part) {
-        const span = document.createElement('span');
-        span.className = 'word';
-        span.textContent = part;
-        frag.appendChild(span);
+        const { lead, core, trail } = splitWordTokenIntoParts(part);
+        if (lead) frag.appendChild(document.createTextNode(lead));
+        if (core) {
+          const span = document.createElement('span');
+          span.className = 'word';
+          span.textContent = core;
+          frag.appendChild(span);
+        }
+        if (trail) frag.appendChild(document.createTextNode(trail));
       }
     }
     node.parentNode.replaceChild(frag, node);
@@ -529,7 +567,7 @@ function wrapWords(container) {
 }
 
 function cleanWord(w) {
-  return w.replace(/^[¿¡«"'()\[\]\-–—]+|[.,:;!?»"'()\[\]\-–—…]+$/g, '');
+  return w.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '');
 }
 
 function isPhrase(text) {
