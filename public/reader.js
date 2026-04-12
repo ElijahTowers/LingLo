@@ -169,9 +169,47 @@ function renderAlternativeMeanings(meanings) {
     return;
   }
   list.innerHTML = currentAlternativeMeanings
-    .map(line => `<div class="alt-meaning-item">${escapeHtml(line)}</div>`)
+    .map(line => `<div class="alt-meaning-item" data-meaning="${escapeHtml(line)}">${escapeHtml(line)}</div>`)
     .join('');
   wrap.classList.add('visible');
+
+  list.querySelectorAll('.alt-meaning-item').forEach(item => {
+    item.addEventListener('click', async () => {
+      const chosen = item.dataset.meaning;
+      const old = currentTranslation;
+      currentTranslation = chosen;
+
+      // Update sidebar translation display
+      document.getElementById('sidebar-translation').textContent = chosen;
+
+      // Update mobile popup translation if visible
+      const popupTrans = document.getElementById('popup-translation');
+      if (document.getElementById('word-popup').classList.contains('visible')) {
+        popupTrans.textContent = chosen;
+        popupTrans.className = 'popup-translation';
+      }
+
+      // If already saved, update the translation in the DB immediately
+      const saved = savedWords.get(currentWord.toLowerCase());
+      if (saved) {
+        saved.translation = chosen;
+        await fetch(`/api/words/${saved.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ translation: chosen })
+        });
+      }
+
+      updateSaveBtn(currentWord);
+
+      // Rebuild list: swap chosen out, put old primary back in
+      const newMeanings = [
+        ...(old && normalizeMeaning(old) !== normalizeMeaning(chosen) ? [old] : []),
+        ...currentAlternativeMeanings.filter(m => normalizeMeaning(m) !== normalizeMeaning(chosen))
+      ].slice(0, 3);
+      renderAlternativeMeanings(newMeanings);
+    });
+  });
 }
 
 function normalizeMeaningMatch(text) {
@@ -2164,12 +2202,21 @@ async function loadAiBackend() {
 
 function renderAiToggle() {
   if (!aiToggleBtn) return;
-  aiToggleBtn.textContent = currentAiBackend === 'gemini' ? 'Gemini' : 'Ollama';
-  aiToggleBtn.style.color = currentAiBackend === 'gemini' ? '#4f8ef7' : 'var(--text-muted)';
+  if (currentAiBackend === 'gemini') {
+    aiToggleBtn.textContent = 'Gemini';
+    aiToggleBtn.style.color = '#4f8ef7';
+  } else if (currentAiBackend === 'minimax') {
+    aiToggleBtn.textContent = 'MiniMax';
+    aiToggleBtn.style.color = '#ff8c42';
+  } else {
+    aiToggleBtn.textContent = 'Ollama';
+    aiToggleBtn.style.color = 'var(--text-muted)';
+  }
 }
 
 aiToggleBtn?.addEventListener('click', async () => {
-  const next = currentAiBackend === 'ollama' ? 'gemini' : 'ollama';
+  const order = ['ollama', 'gemini', 'minimax'];
+  const next = order[(order.indexOf(currentAiBackend) + 1 + order.length) % order.length];
   try {
     await fetch('/api/settings', {
       method: 'POST',

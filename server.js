@@ -1,5 +1,5 @@
 require('dotenv').config();
-const APP_VERSION = 'v5.01';
+const APP_VERSION = 'v5.02';
 const express = require('express');
 const crypto = require('crypto');
 const multer = require('multer');
@@ -184,6 +184,9 @@ async function ollamaGenerateText(prompt, model = 'qwen2.5-coder:7b') {
 // ── Gemini backend ──
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 const GEMINI_MODEL = 'gemini-2.0-flash';
+const MINIMAX_API_KEY = process.env.MINIMAX_API_KEY || '';
+const MINIMAX_BASE_URL = (process.env.MINIMAX_BASE_URL || 'https://api.minimax.io/v1').replace(/\/$/, '');
+const MINIMAX_MODEL = process.env.MINIMAX_MODEL || 'MiniMax-M2';
 
 async function geminiGenerateText(prompt) {
   if (!GEMINI_API_KEY) throw new Error('No Gemini API key configured');
@@ -228,6 +231,62 @@ async function geminiStream(prompt, res) {
   res.end();
 }
 
+async function minimaxGenerateText(prompt) {
+  if (!MINIMAX_API_KEY) throw new Error('No MiniMax API key configured');
+  const r = await fetch(`${MINIMAX_BASE_URL}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${MINIMAX_API_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      model: MINIMAX_MODEL,
+      messages: [
+        { role: 'user', content: prompt }
+      ]
+    })
+  });
+  if (!r.ok) throw new Error(`MiniMax error: ${r.status}`);
+  const data = await r.json();
+  return data.choices?.[0]?.message?.content?.trim() || '';
+}
+
+async function minimaxStream(prompt, res) {
+  if (!MINIMAX_API_KEY) throw new Error('No MiniMax API key configured');
+  const r = await fetch(`${MINIMAX_BASE_URL}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${MINIMAX_API_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      model: MINIMAX_MODEL,
+      stream: true,
+      messages: [
+        { role: 'user', content: prompt }
+      ]
+    })
+  });
+  if (!r.ok || !r.body) throw new Error(`MiniMax error: ${r.status}`);
+  const reader = r.body.getReader();
+  const decoder = new TextDecoder();
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    for (const line of decoder.decode(value, { stream: true }).split('\n')) {
+      if (!line.startsWith('data: ')) continue;
+      const payload = line.slice(6).trim();
+      if (!payload || payload === '[DONE]') continue;
+      try {
+        const json = JSON.parse(payload);
+        const text = json.choices?.[0]?.delta?.content || json.choices?.[0]?.message?.content;
+        if (text) res.write(text);
+      } catch { }
+    }
+  }
+  res.end();
+}
+
 // ── Settings (ai backend) ──
 const SETTINGS_FILE = path.join(__dirname, 'db', 'settings.json');
 function loadSettings() {
@@ -241,11 +300,13 @@ let appSettings = loadSettings();
 // ── AI router ──
 async function aiGenerateText(prompt) {
   if ((appSettings.aiBackend || 'ollama') === 'gemini') return geminiGenerateText(prompt);
+  if ((appSettings.aiBackend || 'ollama') === 'minimax') return minimaxGenerateText(prompt);
   return ollamaGenerateText(prompt);
 }
 
 async function aiStream(prompt, res) {
   if ((appSettings.aiBackend || 'ollama') === 'gemini') return geminiStream(prompt, res);
+  if ((appSettings.aiBackend || 'ollama') === 'minimax') return minimaxStream(prompt, res);
   // Ollama streaming
   const r = await fetch('http://localhost:11435/api/generate', {
     method: 'POST',
@@ -1418,7 +1479,7 @@ app.get('/api/settings', (req, res) => {
 
 app.post('/api/settings', (req, res) => {
   const { aiBackend } = req.body;
-  if (aiBackend === 'ollama' || aiBackend === 'gemini') {
+  if (aiBackend === 'ollama' || aiBackend === 'gemini' || aiBackend === 'minimax') {
     appSettings.aiBackend = aiBackend;
     saveSettings(appSettings);
     res.json({ ok: true, aiBackend });
@@ -1479,6 +1540,13 @@ app.get('/api/words', async (req, res) => {
 
 app.delete('/api/words/:id', (req, res) => {
   db.prepare('DELETE FROM words WHERE id = ?').run(req.params.id);
+  res.json({ ok: true });
+});
+
+app.patch('/api/words/:id', (req, res) => {
+  const { translation } = req.body;
+  if (!translation?.trim()) return res.status(400).json({ error: 'No translation' });
+  db.prepare('UPDATE words SET translation = ? WHERE id = ?').run(translation.trim(), req.params.id);
   res.json({ ok: true });
 });
 

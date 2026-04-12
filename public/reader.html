@@ -421,8 +421,15 @@
       line-height: 1.5;
     }
     .alt-meaning-item {
-      padding-left: 12px;
+      padding: 2px 6px 2px 12px;
       position: relative;
+      cursor: pointer;
+      border-radius: 4px;
+      transition: background 0.12s, color 0.12s;
+    }
+    .alt-meaning-item:hover {
+      background: var(--purple-glow);
+      color: var(--purple);
     }
     .alt-meaning-item::before {
       content: '•';
@@ -1187,6 +1194,6 @@
       <button class="popup-btn primary" id="popup-more-btn">Details →</button>
     </div>
   </div>
-  <script src="reader.js?v=5.00"></script>
+  <script src="reader.js?v=5.02"></script>
 </body>
 </html>
