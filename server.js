@@ -1,5 +1,5 @@
 require('dotenv').config();
-const APP_VERSION = 'v5.02';
+const APP_VERSION = 'v5.03';
 const express = require('express');
 const crypto = require('crypto');
 const multer = require('multer');
@@ -156,7 +156,19 @@ function authMiddleware(req, res, next) {
   res.redirect(`/login?next=${nextUrl}`);
 }
 
-async function ollamaGenerateText(prompt, model = 'qwen2.5-coder:7b') {
+function getOllamaModel() {
+  return (appSettings.ollamaModel || process.env.OLLAMA_MODEL || 'qwen2.5-coder:7b').trim();
+}
+
+function getGeminiModel() {
+  return (appSettings.geminiModel || process.env.GEMINI_MODEL || 'gemini-2.0-flash').trim();
+}
+
+function getMiniMaxModel() {
+  return (appSettings.minimaxModel || process.env.MINIMAX_MODEL || 'MiniMax-M2').trim();
+}
+
+async function ollamaGenerateText(prompt, model = getOllamaModel()) {
   const r = await fetch('http://localhost:11435/api/generate', {
     headers: { 'X-Source': 'linglo' },
     method: 'POST',
@@ -183,15 +195,14 @@ async function ollamaGenerateText(prompt, model = 'qwen2.5-coder:7b') {
 
 // ── Gemini backend ──
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
-const GEMINI_MODEL = 'gemini-2.0-flash';
 const MINIMAX_API_KEY = process.env.MINIMAX_API_KEY || '';
 const MINIMAX_BASE_URL = (process.env.MINIMAX_BASE_URL || 'https://api.minimax.io/v1').replace(/\/$/, '');
-const MINIMAX_MODEL = process.env.MINIMAX_MODEL || 'MiniMax-M2';
 
 async function geminiGenerateText(prompt) {
   if (!GEMINI_API_KEY) throw new Error('No Gemini API key configured');
+  const model = getGeminiModel();
   const r = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -205,8 +216,9 @@ async function geminiGenerateText(prompt) {
 
 async function geminiStream(prompt, res) {
   if (!GEMINI_API_KEY) throw new Error('No Gemini API key configured');
+  const model = getGeminiModel();
   const r = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:streamGenerateContent?alt=sse&key=${GEMINI_API_KEY}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${GEMINI_API_KEY}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -233,6 +245,7 @@ async function geminiStream(prompt, res) {
 
 async function minimaxGenerateText(prompt) {
   if (!MINIMAX_API_KEY) throw new Error('No MiniMax API key configured');
+  const model = getMiniMaxModel();
   const r = await fetch(`${MINIMAX_BASE_URL}/chat/completions`, {
     method: 'POST',
     headers: {
@@ -240,7 +253,7 @@ async function minimaxGenerateText(prompt) {
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      model: MINIMAX_MODEL,
+      model,
       messages: [
         { role: 'user', content: prompt }
       ]
@@ -253,6 +266,7 @@ async function minimaxGenerateText(prompt) {
 
 async function minimaxStream(prompt, res) {
   if (!MINIMAX_API_KEY) throw new Error('No MiniMax API key configured');
+  const model = getMiniMaxModel();
   const r = await fetch(`${MINIMAX_BASE_URL}/chat/completions`, {
     method: 'POST',
     headers: {
@@ -260,7 +274,7 @@ async function minimaxStream(prompt, res) {
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      model: MINIMAX_MODEL,
+      model,
       stream: true,
       messages: [
         { role: 'user', content: prompt }
@@ -311,7 +325,7 @@ async function aiStream(prompt, res) {
   const r = await fetch('http://localhost:11435/api/generate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: 'qwen2.5-coder:7b', prompt, stream: true })
+    body: JSON.stringify({ model: getOllamaModel(), prompt, stream: true })
   });
   if (!r.ok || !r.body) throw new Error('Ollama not available');
   const reader = r.body.getReader();
@@ -1474,18 +1488,39 @@ app.post('/api/simplify', async (req, res) => {
 });
 
 app.get('/api/settings', (req, res) => {
-  res.json({ aiBackend: appSettings.aiBackend || 'ollama' });
+  res.json({
+    aiBackend: appSettings.aiBackend || 'ollama',
+    ollamaModel: getOllamaModel(),
+    geminiModel: getGeminiModel(),
+    minimaxModel: getMiniMaxModel(),
+    availability: {
+      ollama: true,
+      gemini: !!GEMINI_API_KEY,
+      minimax: !!MINIMAX_API_KEY
+    }
+  });
 });
 
 app.post('/api/settings', (req, res) => {
-  const { aiBackend } = req.body;
-  if (aiBackend === 'ollama' || aiBackend === 'gemini' || aiBackend === 'minimax') {
-    appSettings.aiBackend = aiBackend;
-    saveSettings(appSettings);
-    res.json({ ok: true, aiBackend });
-  } else {
+  const { aiBackend, ollamaModel, geminiModel, minimaxModel } = req.body || {};
+  if (aiBackend && aiBackend !== 'ollama' && aiBackend !== 'gemini' && aiBackend !== 'minimax') {
     res.status(400).json({ error: 'Invalid backend' });
+    return;
   }
+  const nextSettings = { ...appSettings };
+  if (aiBackend) nextSettings.aiBackend = aiBackend;
+  if (typeof ollamaModel === 'string') nextSettings.ollamaModel = ollamaModel.trim() || 'qwen2.5-coder:7b';
+  if (typeof geminiModel === 'string') nextSettings.geminiModel = geminiModel.trim() || 'gemini-2.0-flash';
+  if (typeof minimaxModel === 'string') nextSettings.minimaxModel = minimaxModel.trim() || 'MiniMax-M2';
+  appSettings = nextSettings;
+  saveSettings(appSettings);
+  res.json({
+    ok: true,
+    aiBackend: appSettings.aiBackend || 'ollama',
+    ollamaModel: getOllamaModel(),
+    geminiModel: getGeminiModel(),
+    minimaxModel: getMiniMaxModel()
+  });
 });
 
 app.post('/api/words', (req, res) => {

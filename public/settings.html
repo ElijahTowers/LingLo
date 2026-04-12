@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LingLo Settings</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Lora:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css?v=4.40">
+  <style>
+    .settings-main {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 42px 24px 72px;
+    }
+    .settings-hero {
+      margin-bottom: 26px;
+    }
+    .settings-hero h1 {
+      font-size: 2rem;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: var(--text);
+      font-family: var(--font-read);
+      letter-spacing: -0.03em;
+    }
+    .settings-hero p {
+      max-width: 62ch;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+    .settings-card {
+      background: var(--surface);
+      border: 1px solid var(--border-strong);
+      border-radius: 14px;
+      box-shadow: var(--shadow-md);
+      padding: 24px;
+    }
+    .settings-grid {
+      display: grid;
+      gap: 18px;
+    }
+    .settings-section {
+      padding: 18px;
+      border-radius: 12px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+    }
+    body.theme-light .settings-section {
+      background: rgba(0,0,0,0.025);
+    }
+    body.theme-ereader .settings-section {
+      background: #f7f7f7;
+    }
+    .settings-section h2 {
+      font-size: 1rem;
+      font-weight: 700;
+      margin-bottom: 6px;
+      color: var(--text);
+    }
+    .settings-section p {
+      color: var(--text-muted);
+      line-height: 1.5;
+      font-size: 0.92rem;
+      margin-bottom: 16px;
+    }
+    .field {
+      display: grid;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .field:last-child {
+      margin-bottom: 0;
+    }
+    .field label {
+      font-size: 0.82rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+    .field select,
+    .field input {
+      width: 100%;
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--border-strong);
+      border-radius: 10px;
+      padding: 12px 13px;
+      font: inherit;
+    }
+    .field select:focus,
+    .field input:focus {
+      outline: none;
+      border-color: var(--purple);
+      box-shadow: 0 0 0 3px var(--purple-glow);
+    }
+    .provider-status {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 11px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.02);
+      margin-bottom: 10px;
+    }
+    body.theme-light .provider-status {
+      background: rgba(0,0,0,0.02);
+    }
+    .provider-meta {
+      min-width: 0;
+    }
+    .provider-name {
+      font-size: 0.92rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .provider-note {
+      margin-top: 4px;
+      color: var(--text-muted);
+      font-size: 0.84rem;
+      line-height: 1.45;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      padding: 4px 9px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      white-space: nowrap;
+      border: 1px solid transparent;
+    }
+    .pill.ok {
+      background: rgba(52,211,153,0.12);
+      color: #8ce7b2;
+      border-color: rgba(52,211,153,0.18);
+    }
+    .pill.off {
+      background: rgba(224,112,112,0.1);
+      color: #ef9d9d;
+      border-color: rgba(224,112,112,0.16);
+    }
+    body.theme-light .pill.ok {
+      color: #1d6d48;
+    }
+    body.theme-light .pill.off {
+      color: #a24a4a;
+    }
+    .settings-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 22px;
+    }
+    .settings-status {
+      min-height: 1.3em;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+    .settings-status.error {
+      color: var(--red);
+    }
+    .settings-status.ok {
+      color: var(--green);
+    }
+    .env-note {
+      font-size: 0.84rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+    @media (max-width: 720px) {
+      .settings-main {
+        padding: 28px 16px 56px;
+      }
+      .header-inner {
+        gap: 10px;
+      }
+      .settings-card {
+        padding: 16px;
+      }
+      .provider-status {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+      .settings-actions {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .settings-actions .btn {
+        justify-content: center;
+      }
+    }
+  </style>
+</head>
+<body>
+  <script>
+    (function() {
+      try {
+        var s = JSON.parse(localStorage.getItem('linglo_settings') || '{}');
+        var t = s.theme || 'dark';
+        if (t === 'light') document.body.classList.add('theme-light');
+        if (t === 'ereader') document.body.classList.add('theme-ereader');
+      } catch (e) {}
+    })();
+  </script>
+  <header class="header">
+    <div class="header-inner">
+      <a class="logo" href="/">LingLo <span id="version-badge" class="version-badge"></span></a>
+      <div class="header-actions">
+        <a href="/reader.html" class="btn btn-ghost">Reader</a>
+        <a href="/flashcards.html" class="btn btn-ghost">Word List</a>
+        <a href="/" class="btn btn-primary">Library</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="settings-main">
+    <section class="settings-hero">
+      <h1>AI Settings</h1>
+      <p>Choose the default AI provider for LingLo and set the exact model per provider. API keys stay server-side in environment variables; this page only stores backend and model names.</p>
+    </section>
+
+    <section class="settings-card">
+      <div class="settings-grid">
+        <section class="settings-section">
+          <h2>Default Provider</h2>
+          <p>This decides which backend LingLo uses for translations and explanations by default. The reader header toggle still works as a quick switch.</p>
+          <div class="field">
+            <label for="ai-backend">Provider</label>
+            <select id="ai-backend">
+              <option value="ollama">Ollama</option>
+              <option value="gemini">Gemini</option>
+              <option value="minimax">MiniMax</option>
+            </select>
+          </div>
+        </section>
+
+        <section class="settings-section">
+          <h2>Models</h2>
+          <p>Use exact provider model IDs. LingLo stores these names and uses them on the server for future requests.</p>
+          <div class="field">
+            <label for="ollama-model">Ollama model</label>
+            <input id="ollama-model" type="text" placeholder="qwen2.5-coder:7b" autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="gemini-model">Gemini model</label>
+            <input id="gemini-model" type="text" placeholder="gemini-2.0-flash" autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="minimax-model">MiniMax model</label>
+            <input id="minimax-model" type="text" placeholder="MiniMax-M2" autocomplete="off">
+          </div>
+        </section>
+
+        <section class="settings-section">
+          <h2>Provider Availability</h2>
+          <p>These checks only indicate whether the server currently has the required key configured. They do not test model correctness.</p>
+          <div class="provider-status">
+            <div class="provider-meta">
+              <div class="provider-name">Ollama</div>
+              <div class="provider-note">Local provider on this server. Model names must exist in the Ollama instance.</div>
+            </div>
+            <div class="pill ok" id="status-ollama">Available</div>
+          </div>
+          <div class="provider-status">
+            <div class="provider-meta">
+              <div class="provider-name">Gemini</div>
+              <div class="provider-note">Requires <code>GEMINI_API_KEY</code> on the server. Billing is external to LingLo.</div>
+            </div>
+            <div class="pill off" id="status-gemini">Not configured</div>
+          </div>
+          <div class="provider-status">
+            <div class="provider-meta">
+              <div class="provider-name">MiniMax</div>
+              <div class="provider-note">Requires a rotated <code>MINIMAX_API_KEY</code> on the server. The key is not stored in this page.</div>
+            </div>
+            <div class="pill off" id="status-minimax">Not configured</div>
+          </div>
+          <div class="env-note">If a provider is not configured here, selecting it will still save the choice, but requests will fail until the server env is set.</div>
+        </section>
+      </div>
+
+      <div class="settings-actions">
+        <button class="btn btn-primary" id="save-btn">Save Settings</button>
+        <button class="btn btn-ghost" id="reload-btn" type="button">Reload</button>
+        <div class="settings-status" id="settings-status"></div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const backendEl = document.getElementById('ai-backend');
+    const ollamaModelEl = document.getElementById('ollama-model');
+    const geminiModelEl = document.getElementById('gemini-model');
+    const minimaxModelEl = document.getElementById('minimax-model');
+    const statusEl = document.getElementById('settings-status');
+
+    function setAvailability(id, available) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.textContent = available ? 'Available' : 'Not configured';
+      el.className = `pill ${available ? 'ok' : 'off'}`;
+    }
+
+    function setStatus(message, tone) {
+      statusEl.textContent = message || '';
+      statusEl.className = `settings-status${tone ? ` ${tone}` : ''}`;
+    }
+
+    async function loadSettings() {
+      setStatus('Loading settings…');
+      const response = await fetch('/api/settings');
+      if (!response.ok) throw new Error('Could not load settings');
+      const data = await response.json();
+      backendEl.value = data.aiBackend || 'ollama';
+      ollamaModelEl.value = data.ollamaModel || '';
+      geminiModelEl.value = data.geminiModel || '';
+      minimaxModelEl.value = data.minimaxModel || '';
+      setAvailability('status-ollama', true);
+      setAvailability('status-gemini', !!data.availability?.gemini);
+      setAvailability('status-minimax', !!data.availability?.minimax);
+      setStatus('Loaded.', 'ok');
+    }
+
+    async function saveSettings() {
+      setStatus('Saving…');
+      const response = await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          aiBackend: backendEl.value,
+          ollamaModel: ollamaModelEl.value,
+          geminiModel: geminiModelEl.value,
+          minimaxModel: minimaxModelEl.value
+        })
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || 'Could not save settings');
+      }
+      setStatus('Saved. New requests will use these settings.', 'ok');
+    }
+
+    document.getElementById('save-btn').addEventListener('click', () => {
+      saveSettings().catch(err => setStatus(err.message, 'error'));
+    });
+
+    document.getElementById('reload-btn').addEventListener('click', () => {
+      loadSettings().catch(err => setStatus(err.message, 'error'));
+    });
+
+    fetch('/api/version').then(r => r.json()).then(d => {
+      document.getElementById('version-badge').textContent = d.version;
+    }).catch(() => {});
+
+    loadSettings().catch(err => setStatus(err.message, 'error'));
+  </script>
+</body>
+</html>
