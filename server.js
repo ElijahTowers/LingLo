@@ -1,5 +1,5 @@
 require('dotenv').config();
-const APP_VERSION = 'v5.06';
+const APP_VERSION = 'v5.07';
 const express = require('express');
 const crypto = require('crypto');
 const multer = require('multer');
@@ -243,6 +243,23 @@ async function geminiStream(prompt, res) {
   res.end();
 }
 
+// MiniMax tends to output inline reasoning before the actual answer.
+// This strips think-blocks and common reasoning-preamble lines, then
+// falls back to the last non-empty paragraph if the result is still too long.
+function filterMiniMaxProse(text) {
+  text = text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+  const reasoning = /^(i |i'm |i need|i'll |i will |i am |the user|this is a|the prompt|looking at|let me|based on|given the|note:|here is|sure,|okay,|wait,|but |so |thus,|since |as a |as an |for this|in spanish|in english|according|my answer|answer:|translation:|result:|output:|the answer|the translation|the meaning|the word|the phrase|the sentence|i'll provide|i will provide|i can |i should|i need to|to translate|to answer|first,|second,|third,)/i;
+  const lines = text.split('\n');
+  const clean = lines.filter(l => l.trim() && !reasoning.test(l.trim()));
+  const result = clean.join('\n').trim();
+  // If still very long, take the last non-empty paragraph (answer tends to come last)
+  if (result.length > 300) {
+    const paras = result.split(/\n\n+/).map(p => p.trim()).filter(Boolean);
+    return paras[paras.length - 1] || result;
+  }
+  return result || text.trim();
+}
+
 async function minimaxGenerateText(prompt) {
   if (!MINIMAX_API_KEY) throw new Error('No MiniMax API key configured');
   const model = getMiniMaxModel();
@@ -262,72 +279,15 @@ async function minimaxGenerateText(prompt) {
   });
   if (!r.ok) throw new Error(`MiniMax error: ${r.status}`);
   const data = await r.json();
-  let text = data.choices?.[0]?.message?.content?.trim() || '';
-  // Strip MiniMax thinking blocks
-  text = text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
-  return text;
+  const raw = data.choices?.[0]?.message?.content?.trim() || '';
+  return filterMiniMaxProse(raw);
 }
 
 async function minimaxStream(prompt, res) {
-  if (!MINIMAX_API_KEY) throw new Error('No MiniMax API key configured');
-  const model = getMiniMaxModel();
-  const r = await fetch(`${MINIMAX_BASE_URL}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${MINIMAX_API_KEY}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      model,
-      stream: true,
-      messages: [
-        { role: 'system', content: 'You are a concise translation assistant. Follow instructions exactly. Never add explanations, notes, alternatives, or commentary unless explicitly asked.' },
-        { role: 'user', content: prompt }
-      ]
-    })
-  });
-  if (!r.ok || !r.body) throw new Error(`MiniMax error: ${r.status}`);
-  const reader = r.body.getReader();
-  const decoder = new TextDecoder();
-  let skipMode = false;
-  let buffer = '';
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    // Process complete lines
-    const lines = buffer.split('\n');
-    buffer = lines.pop() || '';
-    for (const line of lines) {
-      if (!line.startsWith('data: ')) continue;
-      const payload = line.slice(6).trim();
-      if (!payload || payload === '[DONE]') continue;
-      try {
-        const json = JSON.parse(payload);
-        const text = json.choices?.[0]?.delta?.content || json.choices?.[0]?.message?.content || '';
-        // Strip thinking blocks mid-stream
-        const stripped = text.replace(/<think>[\s\S]*?<\/think>/g, '');
-        // Handle partial thinking tag boundaries
-        let toWrite = stripped;
-        if (!skipMode && stripped !== text) {
-          // A thinking block was fully contained in this chunk
-          if (stripped === '') toWrite = '';
-        }
-        // Detect open/close tags spanning chunks
-        const openCount = (text.match(/<think>/g) || []).length;
-        const closeCount = (text.match(/<\/think>/g) || []).length;
-        if (openCount > closeCount && !text.includes('</think>')) {
-          skipMode = true; // entering thinking block
-          toWrite = '';
-        }
-        if (skipMode && text.includes('</think>')) {
-          skipMode = false; // exited thinking block
-          toWrite = '';
-        }
-        if (toWrite) res.write(toWrite);
-      } catch { }
-    }
-  }
+  // MiniMax outputs verbose inline reasoning, so we buffer the full response,
+  // clean it, then send — rather than streaming chunks directly.
+  const cleaned = await minimaxGenerateText(prompt);
+  res.write(cleaned);
   res.end();
 }
 
@@ -1445,8 +1405,10 @@ Reply with EXACTLY one of these labels:
 
 Prefer "Broadly neutral" if the term is standard across regions.`
     );
+    const LABELS = ['Broadly neutral', 'Mostly Spain', 'Mostly Latin America', 'Context-dependent'];
+    const found = LABELS.find(l => label.includes(l)) || 'Broadly neutral';
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-    res.end(label.trim());
+    res.end(found);
   } catch {
     res.status(503).end('Broadly neutral');
   }
