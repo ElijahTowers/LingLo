@@ -1,5 +1,5 @@
 require('dotenv').config();
-const APP_VERSION = 'v5.04';
+const APP_VERSION = 'v5.05';
 const express = require('express');
 const crypto = require('crypto');
 const multer = require('multer');
@@ -255,6 +255,7 @@ async function minimaxGenerateText(prompt) {
     body: JSON.stringify({
       model,
       messages: [
+        { role: 'system', content: 'You are a concise translation assistant. Follow instructions exactly. Never add explanations, notes, alternatives, or commentary unless explicitly asked.' },
         { role: 'user', content: prompt }
       ]
     })
@@ -280,6 +281,7 @@ async function minimaxStream(prompt, res) {
       model,
       stream: true,
       messages: [
+        { role: 'system', content: 'You are a concise translation assistant. Follow instructions exactly. Never add explanations, notes, alternatives, or commentary unless explicitly asked.' },
         { role: 'user', content: prompt }
       ]
     })
