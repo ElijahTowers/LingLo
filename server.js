@@ -1,5 +1,5 @@
 require('dotenv').config();
-const APP_VERSION = 'v5.05';
+const APP_VERSION = 'v5.06';
 const express = require('express');
 const crypto = require('crypto');
 const multer = require('multer');
@@ -1409,20 +1409,22 @@ app.post('/api/meanings', async (req, res) => {
   const { text, sentence, primaryMeaning } = req.body;
   if (!text?.trim()) return res.status(400).json({ error: 'No text provided' });
   try {
-    const prompt = `You are a concise Spanish dictionary assistant. The user clicked the Spanish word or phrase "${text}"${sentence ? ` in the sentence "${sentence}"` : ''}. The main in-context translation is "${primaryMeaning || ''}".
+    const prompt = `List up to 3 alternative English translations for the Spanish word or phrase "${text}"${sentence ? ` (context: "${sentence}")` : ''}.${primaryMeaning ? ` Avoid repeating: ${primaryMeaning}.` : ''}
 
-Give up to 3 short alternative English meanings or translations that this Spanish word or phrase can also have.
+Output format — exactly like this, nothing else:
+attack
+bout
+seizure
 
-Rules:
-- One meaning per line
-- No numbering
-- No quotes
-- No explanations
-- Avoid repeating the exact main in-context translation if possible
-- If there are no good alternatives, reply with: none`;
+If no good alternatives exist, reply with exactly: none`;
+    const raw = await aiGenerateText(prompt);
+    // Extract only short translation-like lines (strip prose/reasoning lines)
+    const proseStart = /^(the |this |i |here|note|alternative|translation|below|sure|okay|as |for |in |to |a |an |let |based|context)/i;
+    const lines = raw.split('\n')
+      .map(l => l.replace(/^[\d\-*.)\s]+/, '').replace(/["""]/g, '').trim())
+      .filter(l => l && l.toLowerCase() !== 'none' && !proseStart.test(l) && l.split(' ').length <= 6 && !l.includes(':'));
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-    res.setHeader('Transfer-Encoding', 'chunked');
-    await aiStream(prompt, res);
+    res.end(lines.slice(0, 3).join('\n') || 'none');
   } catch {
     res.status(503).end('AI not available');
   }
