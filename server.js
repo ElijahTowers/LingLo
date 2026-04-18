@@ -1,5 +1,5 @@
 require('dotenv').config();
-const APP_VERSION = 'v5.03';
+const APP_VERSION = 'v5.04';
 const express = require('express');
 const crypto = require('crypto');
 const multer = require('multer');
@@ -261,7 +261,10 @@ async function minimaxGenerateText(prompt) {
   });
   if (!r.ok) throw new Error(`MiniMax error: ${r.status}`);
   const data = await r.json();
-  return data.choices?.[0]?.message?.content?.trim() || '';
+  let text = data.choices?.[0]?.message?.content?.trim() || '';
+  // Strip MiniMax thinking blocks
+  text = text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+  return text;
 }
 
 async function minimaxStream(prompt, res) {
@@ -284,17 +287,42 @@ async function minimaxStream(prompt, res) {
   if (!r.ok || !r.body) throw new Error(`MiniMax error: ${r.status}`);
   const reader = r.body.getReader();
   const decoder = new TextDecoder();
+  let skipMode = false;
+  let buffer = '';
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
-    for (const line of decoder.decode(value, { stream: true }).split('\n')) {
+    buffer += decoder.decode(value, { stream: true });
+    // Process complete lines
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+    for (const line of lines) {
       if (!line.startsWith('data: ')) continue;
       const payload = line.slice(6).trim();
       if (!payload || payload === '[DONE]') continue;
       try {
         const json = JSON.parse(payload);
-        const text = json.choices?.[0]?.delta?.content || json.choices?.[0]?.message?.content;
-        if (text) res.write(text);
+        const text = json.choices?.[0]?.delta?.content || json.choices?.[0]?.message?.content || '';
+        // Strip thinking blocks mid-stream
+        const stripped = text.replace(/<think>[\s\S]*?<\/think>/g, '');
+        // Handle partial thinking tag boundaries
+        let toWrite = stripped;
+        if (!skipMode && stripped !== text) {
+          // A thinking block was fully contained in this chunk
+          if (stripped === '') toWrite = '';
+        }
+        // Detect open/close tags spanning chunks
+        const openCount = (text.match(/<think>/g) || []).length;
+        const closeCount = (text.match(/<\/think>/g) || []).length;
+        if (openCount > closeCount && !text.includes('</think>')) {
+          skipMode = true; // entering thinking block
+          toWrite = '';
+        }
+        if (skipMode && text.includes('</think>')) {
+          skipMode = false; // exited thinking block
+          toWrite = '';
+        }
+        if (toWrite) res.write(toWrite);
       } catch { }
     }
   }
